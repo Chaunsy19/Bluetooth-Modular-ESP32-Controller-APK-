@@ -119,8 +119,21 @@ class AppController extends ChangeNotifier {
       });
   Future<void> renameModule(String id, String name) =>
       _send({'command': 'rename_module', 'module_id': id, 'name': name.trim()});
-  Future<void> setModuleEnabled(String id, bool enabled) => _send(
-      {'command': 'set_module_enabled', 'module_id': id, 'enabled': enabled});
+  Future<void> setModuleEnabled(String id, bool enabled) async {
+    final index = modules.indexWhere((module) => module.id == id);
+    if (index >= 0) {
+      modules = [...modules]..[index] =
+          modules[index].withChanges(enabled: enabled);
+      notifyListeners();
+    }
+    await _send(
+        {'command': 'set_module_enabled', 'module_id': id, 'enabled': enabled});
+  }
+
+  Future<void> addModule(Map<String, dynamic> definition) =>
+      _send({'command': 'add_module', 'module': definition});
+  Future<void> deleteModule(String id) =>
+      _send({'command': 'delete_module', 'module_id': id});
   Future<void> setModulePin(String id, int pin) =>
       _send({'command': 'set_module_pin', 'module_id': id, 'pin': pin});
   Future<void> setModuleOrder(List<String> order) =>

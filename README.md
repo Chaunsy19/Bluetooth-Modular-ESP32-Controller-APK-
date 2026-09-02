@@ -21,6 +21,7 @@ BLE service → validated models/state → widget registry → module cards
 - `lib/widgets/module_card.dart`: registry mapping capabilities to widgets.
 - `lib/screens/layout_editor_screen.dart`: reorder and enable/disable.
 - `lib/screens/module_details_screen.dart`: rename, validated pin change, and hide.
+- `lib/screens/add_module_screen.dart`: create persisted modules with type-specific settings.
 - `esp32/ESP32_Control/ESP32_Control.ino`: module definitions, hardware behavior, persistence, validation, and fail-safe.
 
 The ESP32 is the source of truth. Names, enabled state, order, and assigned pins are stored in ESP32 NVS via `Preferences`, so they follow the controller across phones. The phone caches the last validated manifest by BLE device ID for quick restoration, but refreshes it after reconnecting. Hardware types, IDs, ranges, units, and behavior remain firmware-owned.
@@ -80,6 +81,8 @@ unit, decimals, default value, button label, analog-input flag
 
 To add a relay, copy a `TOGGLE` row, give it a new unique ID and unused output pin, then upload. Reconnect or pull down to refresh; the new ON/OFF card appears automatically. Multiple rows may use the same type, but IDs and assigned pins must be unique.
 
+You can also add hardware at runtime: open **Edit layout**, tap **+**, choose the type, enter its name/pin/settings, and tap **Add module**. The ESP32 assigns a stable ID and persists the complete definition. Ordinary modules can be permanently deleted from their Module details page. Safety and Controller Status remain protected. Reset restores the original compiled table if defaults were deleted.
+
 To change type, pin, limits, unit, or default value, edit that row. Keep the ID unchanged so persisted layout stays associated with it. A pin can also be changed from **Edit layout → module details**; firmware rejects incompatible or conflicting assignments.
 
 Persisted names/pins/order override edited defaults. To adopt every newly edited default, press **Reset** in Edit layout. Removing a row from firmware permanently removes that hardware module. **Hide module** only sets `enabled=false` and can be reversed in Edit layout.
@@ -125,10 +128,11 @@ iOS `ios/Runner/Info.plist` contains `NSBluetoothAlwaysUsageDescription` and the
 4. **Analog:** vary a safe 0–3.3 V signal on GPIO 34; confirm the card updates about once per second.
 5. **Rename:** Edit layout → module pencil → change name → Save. Reconnect and confirm it remains.
 6. **Rearrange:** drag module rows in Edit layout. Reconnect and confirm the order remains.
-7. **Hide/enable:** turn a row off in Edit layout; confirm it disappears from the main screen, then re-enable it.
-8. **Disconnect:** turn Bluetooth off. After 3 seconds confirm toggle/PWM outputs are safe-off. Turn it back on and confirm reconnect plus synchronization.
-9. **Add module:** add another unique `TOGGLE` row on a valid unused pin, upload, reconnect, and confirm the new card appears without changing Flutter.
-10. **Invalid pin:** try assigning an already-used or input-only pin to a toggle; confirm the app shows the firmware error.
+7. **Add/delete:** tap +, add a toggle on an unused valid pin, test it, reconnect to verify persistence, then permanently delete it from Module details.
+8. **Hide/enable:** turn a row off in Edit layout; confirm the switch and main screen update immediately, then re-enable it.
+9. **Disconnect:** turn Bluetooth off. After 3 seconds confirm toggle/PWM outputs are safe-off. Turn it back on and confirm reconnect plus synchronization.
+10. **Firmware-defined module:** add another unique `TOGGLE` row in firmware, upload, reconnect, and confirm the new card appears without changing Flutter.
+11. **Invalid pin:** try assigning an already-used or input-only pin to a toggle; confirm the app shows the firmware error.
 
 ## Troubleshooting
 

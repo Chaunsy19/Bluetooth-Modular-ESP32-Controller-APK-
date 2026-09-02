@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../controllers/app_controller.dart';
+import 'add_module_screen.dart';
 import 'module_details_screen.dart';
 
 class LayoutEditorScreen extends StatefulWidget {
@@ -31,6 +32,15 @@ class _LayoutEditorScreenState extends State<LayoutEditorScreen> {
     final c = widget.controller;
     return Scaffold(
       appBar: AppBar(title: const Text('Edit layout'), actions: [
+        IconButton(
+            tooltip: 'Add module',
+            onPressed: c.connected
+                ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => AddModuleScreen(controller: c)))
+                : null,
+            icon: const Icon(Icons.add)),
         TextButton(
             onPressed: c.connected
                 ? () async {

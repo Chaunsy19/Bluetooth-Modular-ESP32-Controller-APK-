@@ -87,6 +87,16 @@ Edit persisted configuration:
 {"command":"reset_layout"}
 ```
 
+Create and permanently delete runtime modules:
+
+```json
+{"command":"add_module","module":{"type":"toggle","name":"Cabin Light","pin":27,"value":false}}
+{"command":"add_module","module":{"type":"slider","name":"Deck Brightness","pin":32,"min":0,"max":100,"step":1,"unit":"%","value":0}}
+{"command":"delete_module","module_id":"module_2"}
+```
+
+The ESP32 generates stable IDs such as `module_2`. Added definitions are stored in Preferences. All ordinary modules—including compiled defaults—can be deleted. The Safety and Controller Status modules return `"deletable":false` and remain protected. Reset restores the original compiled table after defaults have been deleted. The fixed-capacity firmware supports up to 12 total modules.
+
 `set_module_order` must contain every existing ID exactly once. “Hide” uses `set_module_enabled`; it does not delete firmware-defined hardware. `set_module_pin` rejects flash pins, input-only pins for outputs, non-ADC pins for analog modules, and pins already assigned to another module.
 
 ## Responses and events

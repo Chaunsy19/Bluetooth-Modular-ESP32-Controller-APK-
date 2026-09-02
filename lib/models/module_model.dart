@@ -11,6 +11,7 @@ class ModuleModel {
   final String name;
   final int? pin;
   final bool enabled;
+  final bool deletable;
   final int order;
   final dynamic value;
   final double? min;
@@ -27,6 +28,7 @@ class ModuleModel {
     required this.name,
     this.pin,
     this.enabled = true,
+    this.deletable = false,
     this.order = 0,
     this.value,
     this.min,
@@ -89,6 +91,7 @@ class ModuleModel {
       name: name,
       pin: number('pin')?.toInt(),
       enabled: json['enabled'] is bool ? json['enabled'] as bool : true,
+      deletable: json['deletable'] is bool ? json['deletable'] as bool : false,
       order: number('order')?.toInt() ?? 0,
       value: json['value'],
       min: min,
@@ -138,6 +141,7 @@ class ModuleModel {
         'name': name,
         if (pin != null) 'pin': pin,
         'enabled': enabled,
+        'deletable': deletable,
         'order': order,
         'value': value,
         if (min != null) 'min': min,
@@ -168,6 +172,7 @@ class ToggleModule extends ModuleModel {
             name: m.name,
             pin: m.pin,
             enabled: m.enabled,
+            deletable: m.deletable,
             order: m.order,
             value: m.value,
             min: m.min,
@@ -187,6 +192,7 @@ class SliderModule extends ModuleModel {
             name: m.name,
             pin: m.pin,
             enabled: m.enabled,
+            deletable: m.deletable,
             order: m.order,
             value: m.value,
             min: m.min,
@@ -206,6 +212,7 @@ class ServoModule extends ModuleModel {
             name: m.name,
             pin: m.pin,
             enabled: m.enabled,
+            deletable: m.deletable,
             order: m.order,
             value: m.value,
             min: m.min,
@@ -225,6 +232,7 @@ class ValueModule extends ModuleModel {
             name: m.name,
             pin: m.pin,
             enabled: m.enabled,
+            deletable: m.deletable,
             order: m.order,
             value: m.value,
             min: m.min,
@@ -244,6 +252,7 @@ class ButtonModule extends ModuleModel {
             name: m.name,
             pin: m.pin,
             enabled: m.enabled,
+            deletable: m.deletable,
             order: m.order,
             value: m.value,
             min: m.min,
@@ -263,6 +272,7 @@ class TextModule extends ModuleModel {
             name: m.name,
             pin: m.pin,
             enabled: m.enabled,
+            deletable: m.deletable,
             order: m.order,
             value: m.value,
             min: m.min,
@@ -282,6 +292,7 @@ class UnsupportedModule extends ModuleModel {
             name: m.name,
             pin: m.pin,
             enabled: m.enabled,
+            deletable: m.deletable,
             order: m.order,
             value: m.value,
             min: m.min,

@@ -31,7 +31,8 @@ struct Module {
   char text[48];
 };
 
-Module modules[] = {
+constexpr uint8_t DEFAULT_MODULE_COUNT = 7;
+Module modules[MAX_MODULES] = {
   {"led_1", ModuleType::TOGGLE, "LED", 2, 0, 1, 1, "", 0, 0, nullptr, false},
   {"relay_1", ModuleType::TOGGLE, "Water Pump", 26, 0, 1, 1, "", 0, 0, nullptr, false},
   {"pwm_1", ModuleType::SLIDER, "Brightness", 25, 0, 100, 1, "%", 0, 0, nullptr, false},
@@ -40,8 +41,12 @@ Module modules[] = {
   {"all_off", ModuleType::BUTTON, "Safety", -1, 0, 0, 0, "", 0, 0, "Turn All Outputs Off", false},
   {"status_1", ModuleType::TEXT, "Controller Status", -1, 0, 0, 0, "", 0, 0, nullptr, false},
 };
-constexpr uint8_t MODULE_COUNT = sizeof(modules) / sizeof(modules[0]);
-static_assert(MODULE_COUNT <= MAX_MODULES, "Increase MAX_MODULES or remove modules");
+uint8_t moduleCount = DEFAULT_MODULE_COUNT;
+bool customTable = false;
+char runtimeIds[MAX_MODULES][32] = {};
+char runtimeDefaultNames[MAX_MODULES][32] = {};
+char runtimeUnits[MAX_MODULES][12] = {};
+char runtimeLabels[MAX_MODULES][32] = {};
 
 constexpr char DEVICE_NAME[] = "ESP32-Control";
 constexpr char SERVICE_UUID[] = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
@@ -77,7 +82,7 @@ const char* typeName(ModuleType type) {
 }
 
 int findModule(const char* id) {
-  for (uint8_t i = 0; i < MODULE_COUNT; ++i) if (strcmp(modules[i].id, id) == 0) return i;
+  for (uint8_t i = 0; i < moduleCount; ++i) if (strcmp(modules[i].id, id) == 0) return i;
   return -1;
 }
 
@@ -91,7 +96,7 @@ bool pinCanAnalogInput(int pin) {
 
 bool pinUsedByOther(int pin, int moduleIndex) {
   if (pin < 0) return false;
-  for (uint8_t i = 0; i < MODULE_COUNT; ++i) if (i != moduleIndex && modules[i].pin == pin) return true;
+  for (uint8_t i = 0; i < moduleCount; ++i) if (i != moduleIndex && modules[i].pin == pin) return true;
   return false;
 }
 
@@ -149,6 +154,40 @@ void persistModule(uint8_t index) {
   snprintf(key, sizeof(key), "p%u", index); preferences.putChar(key, modules[index].pin);
   snprintf(key, sizeof(key), "e%u", index); preferences.putBool(key, modules[index].enabled);
   snprintf(key, sizeof(key), "o%u", index); preferences.putUChar(key, modules[index].order);
+  if (customTable || index >= DEFAULT_MODULE_COUNT) {
+    snprintf(key, sizeof(key), "id%u", index); preferences.putString(key, modules[index].id);
+    snprintf(key, sizeof(key), "dn%u", index); preferences.putString(key, modules[index].defaultName);
+    snprintf(key, sizeof(key), "ty%u", index); preferences.putUChar(key, (uint8_t)modules[index].type);
+    snprintf(key, sizeof(key), "mi%u", index); preferences.putDouble(key, modules[index].minimum);
+    snprintf(key, sizeof(key), "ma%u", index); preferences.putDouble(key, modules[index].maximum);
+    snprintf(key, sizeof(key), "st%u", index); preferences.putDouble(key, modules[index].step);
+    snprintf(key, sizeof(key), "un%u", index); preferences.putString(key, modules[index].unit);
+    snprintf(key, sizeof(key), "de%u", index); preferences.putUChar(key, modules[index].decimals);
+    snprintf(key, sizeof(key), "dv%u", index); preferences.putDouble(key, modules[index].defaultValue);
+    snprintf(key, sizeof(key), "lb%u", index); preferences.putString(key, modules[index].buttonLabel == nullptr ? "" : modules[index].buttonLabel);
+    snprintf(key, sizeof(key), "an%u", index); preferences.putBool(key, modules[index].analogInput);
+  }
+}
+
+void loadRuntimeDefinition(uint8_t index) {
+  char key[8];
+  snprintf(key, sizeof(key), "id%u", index); strlcpy(runtimeIds[index], preferences.getString(key, "").c_str(), sizeof(runtimeIds[index]));
+  snprintf(key, sizeof(key), "dn%u", index); strlcpy(runtimeDefaultNames[index], preferences.getString(key, "Module").c_str(), sizeof(runtimeDefaultNames[index]));
+  snprintf(key, sizeof(key), "un%u", index); strlcpy(runtimeUnits[index], preferences.getString(key, "").c_str(), sizeof(runtimeUnits[index]));
+  snprintf(key, sizeof(key), "lb%u", index); strlcpy(runtimeLabels[index], preferences.getString(key, "").c_str(), sizeof(runtimeLabels[index]));
+  Module& module = modules[index];
+  module.id = runtimeIds[index];
+  snprintf(key, sizeof(key), "ty%u", index); module.type = (ModuleType)preferences.getUChar(key, 0);
+  module.defaultName = runtimeDefaultNames[index];
+  snprintf(key, sizeof(key), "p%u", index); module.defaultPin = preferences.getChar(key, -1);
+  snprintf(key, sizeof(key), "mi%u", index); module.minimum = preferences.getDouble(key, 0);
+  snprintf(key, sizeof(key), "ma%u", index); module.maximum = preferences.getDouble(key, 1);
+  snprintf(key, sizeof(key), "st%u", index); module.step = preferences.getDouble(key, 1);
+  module.unit = runtimeUnits[index];
+  snprintf(key, sizeof(key), "de%u", index); module.decimals = preferences.getUChar(key, 0);
+  snprintf(key, sizeof(key), "dv%u", index); module.defaultValue = preferences.getDouble(key, 0);
+  module.buttonLabel = runtimeLabels[index];
+  snprintf(key, sizeof(key), "an%u", index); module.analogInput = preferences.getBool(key, false);
 }
 
 void bumpRevision() {
@@ -160,7 +199,11 @@ void bumpRevision() {
 
 void loadConfiguration() {
   configRevision = preferences.getUInt("revision", 1);
-  for (uint8_t i = 0; i < MODULE_COUNT; ++i) {
+  customTable = preferences.getBool("custom", false);
+  moduleCount = preferences.getUChar("count", DEFAULT_MODULE_COUNT);
+  if (moduleCount > MAX_MODULES || (!customTable && moduleCount < DEFAULT_MODULE_COUNT)) moduleCount = DEFAULT_MODULE_COUNT;
+  for (uint8_t i = 0; i < moduleCount; ++i) {
+    if (customTable || i >= DEFAULT_MODULE_COUNT) loadRuntimeDefinition(i);
     char key[8];
     snprintf(key, sizeof(key), "n%u", i);
     String savedName = preferences.getString(key, modules[i].defaultName);
@@ -174,11 +217,11 @@ void loadConfiguration() {
   }
   bool usedOrder[MAX_MODULES] = {};
   bool orderValid = true;
-  for (uint8_t i = 0; i < MODULE_COUNT; ++i) {
-    if (modules[i].order >= MODULE_COUNT || usedOrder[modules[i].order]) orderValid = false;
+  for (uint8_t i = 0; i < moduleCount; ++i) {
+    if (modules[i].order >= moduleCount || usedOrder[modules[i].order]) orderValid = false;
     else usedOrder[modules[i].order] = true;
   }
-  if (!orderValid) for (uint8_t i = 0; i < MODULE_COUNT; ++i) modules[i].order = i;
+  if (!orderValid) for (uint8_t i = 0; i < moduleCount; ++i) modules[i].order = i;
 }
 
 double snappedValue(const Module& module, double raw) {
@@ -217,7 +260,7 @@ void applyValue(uint8_t index, double value) {
 }
 
 void safeOutputsOff() {
-  for (uint8_t i = 0; i < MODULE_COUNT; ++i) {
+  for (uint8_t i = 0; i < moduleCount; ++i) {
     if (modules[i].type == ModuleType::TOGGLE || modules[i].type == ModuleType::SLIDER) {
       applyValue(i, modules[i].minimum);
       if (clientConnected) {
@@ -232,6 +275,7 @@ void safeOutputsOff() {
 void addModuleJson(JsonObject object, const Module& module) {
   object["id"] = module.id; object["type"] = typeName(module.type); object["name"] = module.name;
   object["enabled"] = module.enabled; object["order"] = module.order;
+  object["deletable"] = strcmp(module.id, "all_off") != 0 && strcmp(module.id, "status_1") != 0;
   if (module.pin >= 0) object["pin"] = module.pin;
   if (module.type == ModuleType::TOGGLE) object["value"] = module.value >= 0.5;
   else if (module.type == ModuleType::TEXT) object["value"] = module.text;
@@ -245,13 +289,95 @@ void addModuleJson(JsonObject object, const Module& module) {
   if (module.type == ModuleType::BUTTON) object["label"] = module.buttonLabel;
 }
 
+bool parseModuleType(const char* value, ModuleType& type) {
+  if (strcmp(value, "toggle") == 0) type = ModuleType::TOGGLE;
+  else if (strcmp(value, "slider") == 0) type = ModuleType::SLIDER;
+  else if (strcmp(value, "servo") == 0) type = ModuleType::SERVO;
+  else if (strcmp(value, "value") == 0) type = ModuleType::VALUE;
+  else if (strcmp(value, "button") == 0) type = ModuleType::BUTTON;
+  else if (strcmp(value, "text") == 0) type = ModuleType::TEXT;
+  else return false;
+  return true;
+}
+
+void copyRuntimeSlot(uint8_t destination, uint8_t source) {
+  strlcpy(runtimeIds[destination], modules[source].id, sizeof(runtimeIds[destination]));
+  strlcpy(runtimeDefaultNames[destination], modules[source].defaultName, sizeof(runtimeDefaultNames[destination]));
+  strlcpy(runtimeUnits[destination], modules[source].unit, sizeof(runtimeUnits[destination]));
+  strlcpy(runtimeLabels[destination], modules[source].buttonLabel == nullptr ? "" : modules[source].buttonLabel, sizeof(runtimeLabels[destination]));
+  modules[destination] = modules[source];
+  modules[destination].id = runtimeIds[destination];
+  modules[destination].defaultName = runtimeDefaultNames[destination];
+  modules[destination].unit = runtimeUnits[destination];
+  modules[destination].buttonLabel = runtimeLabels[destination];
+}
+
+void addRuntimeModule(JsonObject definition) {
+  if (moduleCount >= MAX_MODULES) return sendError("Maximum module count reached");
+  if (!definition["type"].is<const char*>() || !definition["name"].is<const char*>()) return sendError("Module needs type and name");
+  const char* requestedName = definition["name"];
+  if (strlen(requestedName) < 1 || strlen(requestedName) > 31) return sendError("Name must be 1 to 31 characters");
+  ModuleType type;
+  if (!parseModuleType(definition["type"], type)) return sendError("Unsupported module type");
+  const bool usesPin = type == ModuleType::TOGGLE || type == ModuleType::SLIDER || type == ModuleType::SERVO || type == ModuleType::VALUE;
+  if (usesPin && !definition["pin"].is<int>()) return sendError("Module needs an integer pin");
+  const uint8_t index = moduleCount;
+  memset(&modules[index], 0, sizeof(Module));
+  uint32_t nextId = preferences.getUInt("next_id", 1);
+  do { snprintf(runtimeIds[index], sizeof(runtimeIds[index]), "module_%lu", (unsigned long)nextId++); } while (findModule(runtimeIds[index]) >= 0);
+  preferences.putUInt("next_id", nextId);
+  strlcpy(runtimeDefaultNames[index], requestedName, sizeof(runtimeDefaultNames[index]));
+  strlcpy(runtimeUnits[index], definition["unit"] | "", sizeof(runtimeUnits[index]));
+  strlcpy(runtimeLabels[index], definition["label"] | requestedName, sizeof(runtimeLabels[index]));
+  Module& module = modules[index];
+  module.id = runtimeIds[index]; module.type = type; module.defaultName = runtimeDefaultNames[index];
+  module.defaultPin = usesPin ? definition["pin"].as<int>() : -1;
+  module.minimum = definition["min"] | 0.0; module.maximum = definition["max"] | (type == ModuleType::SERVO ? 180.0 : 100.0);
+  module.step = definition["step"] | 1.0; module.unit = runtimeUnits[index];
+  module.decimals = constrain(definition["decimals"] | 0, 0, 6);
+  module.defaultValue = definition["value"] | 0.0; module.buttonLabel = runtimeLabels[index];
+  module.analogInput = type == ModuleType::VALUE; module.pin = module.defaultPin;
+  module.enabled = true; module.order = moduleCount; module.value = module.defaultValue;
+  strlcpy(module.name, requestedName, sizeof(module.name)); module.text[0] = '\0';
+  if ((type == ModuleType::SLIDER || type == ModuleType::SERVO || type == ModuleType::VALUE) && (module.maximum <= module.minimum || module.step <= 0)) return sendError("Invalid module range");
+  if (usesPin && !validPinForModule(index, module.pin)) return sendError("Invalid or conflicting pin for module type");
+  module.value = snappedValue(module, module.value);
+  ++moduleCount;
+  preferences.putUChar("count", moduleCount);
+  persistModule(index);
+  configureModulePin(index);
+  bumpRevision();
+  sendSuccess(module.id);
+}
+
+void deleteRuntimeModule(uint8_t index) {
+  if (strcmp(modules[index].id, "all_off") == 0 || strcmp(modules[index].id, "status_1") == 0) return sendError("Safety and status modules cannot be deleted");
+  char deletedId[32];
+  strlcpy(deletedId, modules[index].id, sizeof(deletedId));
+  const uint8_t removedOrder = modules[index].order;
+  for (uint8_t i = 0; i < moduleCount; ++i) detachModulePin(i);
+  customTable = true;
+  for (uint8_t i = index; i + 1 < moduleCount; ++i) copyRuntimeSlot(i, i + 1);
+  --moduleCount;
+  memset(&modules[moduleCount], 0, sizeof(Module));
+  for (uint8_t i = 0; i < moduleCount; ++i) {
+    if (modules[i].order > removedOrder) --modules[i].order;
+    persistModule(i);
+  }
+  for (uint8_t i = 0; i < moduleCount; ++i) configureModulePin(i);
+  preferences.putUChar("count", moduleCount);
+  preferences.putBool("custom", true);
+  bumpRevision();
+  sendSuccess(deletedId);
+}
+
 void sendManifest() {
   JsonDocument start;
   start["event"] = "manifest_start"; start["protocol_version"] = PROTOCOL_VERSION;
-  start["device_name"] = DEVICE_NAME; start["revision"] = configRevision; start["count"] = MODULE_COUNT;
+  start["device_name"] = DEVICE_NAME; start["revision"] = configRevision; start["count"] = moduleCount;
   sendJson(start); delay(35);
-  for (uint8_t order = 0; order < MODULE_COUNT; ++order) {
-    for (uint8_t i = 0; i < MODULE_COUNT; ++i) if (modules[i].order == order) {
+  for (uint8_t order = 0; order < moduleCount; ++order) {
+    for (uint8_t i = 0; i < moduleCount; ++i) if (modules[i].order == order) {
       JsonDocument definition;
       definition["event"] = "module_definition";
       addModuleJson(definition["module"].to<JsonObject>(), modules[i]);
@@ -277,8 +403,20 @@ void handleCommand(const std::string& raw) {
   if (!command["command"].is<const char*>()) return sendError("Missing command");
   const char* action = command["command"];
   if (strcmp(action, "get_modules") == 0) { manifestRequested = true; return; }
+  if (strcmp(action, "add_module") == 0) {
+    if (!command["module"].is<JsonObject>()) return sendError("Missing module definition");
+    addRuntimeModule(command["module"].as<JsonObject>());
+    return;
+  }
   if (strcmp(action, "reset_layout") == 0) {
-    for (uint8_t i = 0; i < MODULE_COUNT; ++i) {
+    if (customTable) {
+      preferences.clear();
+      sendSuccess();
+      delay(100);
+      ESP.restart();
+      return;
+    }
+    for (uint8_t i = 0; i < moduleCount; ++i) {
       detachModulePin(i); strlcpy(modules[i].name, modules[i].defaultName, sizeof(modules[i].name));
       modules[i].pin = modules[i].defaultPin; modules[i].enabled = true; modules[i].order = i;
       configureModulePin(i); persistModule(i);
@@ -286,7 +424,7 @@ void handleCommand(const std::string& raw) {
     bumpRevision(); sendSuccess(); return;
   }
   if (strcmp(action, "set_module_order") == 0) {
-    if (!command["order"].is<JsonArray>() || command["order"].size() != MODULE_COUNT) return sendError("Order must contain every module ID");
+    if (!command["order"].is<JsonArray>() || command["order"].size() != moduleCount) return sendError("Order must contain every module ID");
     bool seen[MAX_MODULES] = {};
     uint8_t position = 0;
     for (JsonVariant id : command["order"].as<JsonArray>()) {
@@ -295,11 +433,15 @@ void handleCommand(const std::string& raw) {
       if (found < 0 || seen[found]) return sendError("Order contains an unknown or duplicate ID");
       seen[found] = true; modules[found].order = position++;
     }
-    for (uint8_t i = 0; i < MODULE_COUNT; ++i) persistModule(i);
+    for (uint8_t i = 0; i < moduleCount; ++i) persistModule(i);
     bumpRevision(); sendSuccess(); return;
   }
   int index;
   if (!commandHasModule(command, index)) return;
+  if (strcmp(action, "delete_module") == 0) {
+    deleteRuntimeModule(index);
+    return;
+  }
   Module& module = modules[index];
   if (strcmp(action, "set_value") == 0) {
     if (!module.enabled) return sendError("Module is disabled");
@@ -360,7 +502,7 @@ void setup() {
   Serial.begin(115200);
   preferences.begin("modules", false);
   loadConfiguration();
-  for (uint8_t i = 0; i < MODULE_COUNT; ++i) configureModulePin(i);
+  for (uint8_t i = 0; i < moduleCount; ++i) configureModulePin(i);
   const int status = findModule("status_1"); if (status >= 0) strlcpy(modules[status].text, "Ready", sizeof(modules[status].text));
   safeOutputsOff();
 
@@ -382,7 +524,7 @@ void loop() {
   if (!clientConnected && !safeOffApplied && now - disconnectedAt >= DISCONNECT_SAFE_OFF_MS) { safeOutputsOff(); Serial.println("BLE timeout: outputs switched off"); }
   if (clientConnected && now - lastSensorReport >= SENSOR_REPORT_MS) {
     lastSensorReport = now;
-    for (uint8_t i = 0; i < MODULE_COUNT; ++i) if (modules[i].enabled && modules[i].type == ModuleType::VALUE) {
+    for (uint8_t i = 0; i < moduleCount; ++i) if (modules[i].enabled && modules[i].type == ModuleType::VALUE) {
       modules[i].value = modules[i].analogInput ? analogRead(modules[i].pin) : digitalRead(modules[i].pin);
       notifyValue(i); delay(20);
     }

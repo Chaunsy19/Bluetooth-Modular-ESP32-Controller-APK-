@@ -58,6 +58,13 @@ class _ModuleDetailsScreenState extends State<ModuleDetailsScreen> {
                     }
                   : null,
               child: const Text('Hide module')),
+          if (widget.module.deletable)
+            TextButton.icon(
+                style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error),
+                onPressed: widget.controller.connected ? _delete : null,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Delete module permanently')),
         ]),
       );
   Widget _row(String label, String value) => ListTile(
@@ -87,6 +94,29 @@ class _ModuleDetailsScreenState extends State<ModuleDetailsScreen> {
         await widget.controller.setModulePin(widget.module.id, newPin);
       }
     }
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _delete() async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Delete module?'),
+            content: Text(
+                'Delete “${widget.module.name}”? This removes its saved configuration from the ESP32.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Delete')),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) return;
+    await widget.controller.deleteModule(widget.module.id);
     if (mounted) Navigator.pop(context);
   }
 }
