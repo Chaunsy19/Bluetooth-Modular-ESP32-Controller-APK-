@@ -137,7 +137,7 @@ Never connect mains voltage on a breadboard. Use rated isolation, fusing, driver
 - Analog modules require ADC1-capable pins, avoiding ADC2/Bluetooth conflicts.
 - A pin cannot belong to two modules.
 - Invalid IDs, commands, JSON, names, values, order lists, and pin changes return errors.
-- BLE commands and status require encrypted, bonded connections. The first paired phone is retained as owner until a physical BOOT-button reset.
+- BLE commands and status require encrypted, bonded connections. The first paired phone's stable BLE identity is retained as owner until a physical BOOT-button reset; rotating over-the-air addresses do not break reconnection.
 - Module storage uses fixed arrays/character buffers; dynamic allocation is limited mainly to JSON/BLE library operations.
 
 ## Android and iOS permissions

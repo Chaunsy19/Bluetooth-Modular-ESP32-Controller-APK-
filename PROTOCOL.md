@@ -12,7 +12,7 @@ All messages are one UTF-8 JSON object. The phone writes commands to the command
 
 Protocol version `1` uses a maximum command length of 512 bytes. The firmware negotiates a 256-byte MTU. A manifest is deliberately split into one module per notification so it never depends on a single oversized BLE packet.
 
-Command writes and status reads require an encrypted BLE connection. Pairing uses bonding, MITM protection, LE Secure Connections, and the firmware's six-digit `BLE_PAIRING_CODE`. The first successfully bonded phone becomes the owner; advertising subsequently filters connections to that bonded peer. Holding the BOOT button during power-on for three seconds clears ownership and BLE bonds.
+Command writes and status reads require an encrypted BLE connection. Pairing uses bonding, MITM protection, LE Secure Connections, and the firmware's six-digit `BLE_PAIRING_CODE`. The first successfully bonded phone's identity becomes the owner; a different authenticated identity is rejected even when phones use rotating over-the-air addresses. Holding the BOOT button during power-on for three seconds clears ownership and BLE bonds.
 
 ## Manifest synchronization
 

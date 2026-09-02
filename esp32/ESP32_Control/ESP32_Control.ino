@@ -76,6 +76,7 @@ uint32_t disconnectedAt = 0;
 uint32_t lastSensorReport = 0;
 uint32_t configRevision = 1;
 bool ownerClaimed = false;
+String ownerIdentity;
 
 const char* typeName(ModuleType type) {
   switch (type) {
@@ -608,12 +609,18 @@ class ServerCallbacks : public NimBLEServerCallbacks {
       NimBLEDevice::getServer()->disconnect(info.getConnHandle());
       return;
     }
+    const String peerIdentity = info.getIdAddress().toString().c_str();
     if (!ownerClaimed) {
       ownerClaimed = true;
+      ownerIdentity = peerIdentity;
       securityPreferences.putBool("claimed", true);
-      NimBLEDevice::whiteListAdd(info.getAddress());
-      NimBLEDevice::getAdvertising()->setScanFilter(false, true);
-      Serial.printf("Controller claimed by %s\n", info.getAddress().toString().c_str());
+      securityPreferences.putString("owner", ownerIdentity);
+      Serial.printf("Controller claimed by %s\n", ownerIdentity.c_str());
+    } else if (peerIdentity != ownerIdentity) {
+      Serial.printf("Rejected non-owner: %s\n", peerIdentity.c_str());
+      NimBLEDevice::deleteBond(info.getIdAddress());
+      NimBLEDevice::getServer()->disconnect(info.getConnHandle());
+      return;
     }
     Serial.printf("Encrypted BLE connection: %s\n", info.getAddress().toString().c_str());
   }
@@ -633,6 +640,7 @@ void setup() {
   preferences.begin("modules", false);
   securityPreferences.begin("security", false);
   ownerClaimed = securityPreferences.getBool("claimed", false);
+  ownerIdentity = securityPreferences.getString("owner", "");
   loadConfiguration();
   for (uint8_t i = 0; i < moduleCount; ++i) configureModulePin(i);
   const int status = findModule("status_1"); if (status >= 0) strlcpy(modules[status].text, "Ready", sizeof(modules[status].text));
@@ -648,11 +656,13 @@ void setup() {
     ownerClaimed = false;
     Serial.println("Phone ownership and BLE bonds cleared");
   }
-  if (ownerClaimed && NimBLEDevice::getNumBonds() > 0) {
-    NimBLEDevice::whiteListAdd(NimBLEDevice::getBondedAddress(0));
-  } else if (ownerClaimed) {
-    securityPreferences.putBool("claimed", false);
+  if (ownerClaimed && (ownerIdentity.isEmpty() || NimBLEDevice::getNumBonds() == 0)) {
+    // Migrate the earlier whitelist-based ownership format or recover a lost phone bond.
+    NimBLEDevice::deleteAllBonds();
+    securityPreferences.clear();
     ownerClaimed = false;
+    ownerIdentity = "";
+    Serial.println("Legacy or incomplete ownership record cleared");
   }
   NimBLEServer* server = NimBLEDevice::createServer(); server->setCallbacks(new ServerCallbacks());
   NimBLEService* service = server->createService(SERVICE_UUID);
@@ -662,7 +672,6 @@ void setup() {
   statusCharacteristic->setValue("{\"event\":\"ready\"}"); service->start();
   NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising(); advertising->setName(DEVICE_NAME);
   advertising->addServiceUUID(SERVICE_UUID); advertising->enableScanResponse(true);
-  if (ownerClaimed) advertising->setScanFilter(false, true);
   advertising->start();
   Serial.println("ESP32 modular BLE controller ready");
 }
