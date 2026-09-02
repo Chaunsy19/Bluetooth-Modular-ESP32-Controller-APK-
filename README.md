@@ -1,6 +1,6 @@
 # Modular ESP32 BLE Control
 
-Bluetooth Modular ESP32 Controller is an Android app and ESP32 firmware system for controlling electronics wirelessly over Bluetooth Low Energy. Modules can be added, deleted, hidden, reordered, renamed, assigned to compatible pins, and converted between supported hardware types directly in the app. The ESP32 saves that configuration and the app automatically rebuilds the controls after connecting. This makes it easy to adapt the system for RC vehicles, robots, and other projects without rewriting or re-uploading firmware for ordinary configuration changes.
+Bluetooth Modular ESP32 Controller is an Android app (iOS app is prepared but not released and tested.) and ESP32 firmware system for controlling electronics wirelessly over Bluetooth Low Energy. Modules can be added, deleted, hidden, reordered, renamed, assigned to compatible pins, and converted between supported hardware types directly in the app. The ESP32 saves that configuration and the app automatically rebuilds the controls after connecting. This makes it easy to adapt the system for RC vehicles, robots, and other projects without rewriting or re-uploading firmware for ordinary configuration changes.
 
 The Flutter Android/iOS app downloads the ESP32's saved module manifest after connecting and builds the controls dynamically. New supported modules can be created from **Edit layout** without changing Flutter or Arduino code.
 
