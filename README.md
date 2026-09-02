@@ -1,10 +1,22 @@
 # Modular ESP32 BLE Control
 
-Bluetooth Modular ESP32 Controller is an Android app and ESP32 firmware system for controlling electronics wirelessly over Bluetooth Low Energy. The ESP32 defines the available hardware modules—such as toggles, PWM sliders, servos, sensors, and buttons—and the app automatically generates the interface from that configuration. This makes it easy to adapt the system for RC vehicles, robots, and other projects without modifying the app each time hardware changes. The long-term goal is to create a flexible, user-friendly receiver platform for people who want configurable control without needing to write code.
+Bluetooth Modular ESP32 Controller is an Android app and ESP32 firmware system for controlling electronics wirelessly over Bluetooth Low Energy. Modules can be added, deleted, hidden, reordered, renamed, assigned to compatible pins, and converted between supported hardware types directly in the app. The ESP32 saves that configuration and the app automatically rebuilds the controls after connecting. This makes it easy to adapt the system for RC vehicles, robots, and other projects without rewriting or re-uploading firmware for ordinary configuration changes.
 
-The ESP32 defines its available hardware modules. The Flutter Android/iOS app downloads that manifest after connecting and builds the controls dynamically. Adding another supported module requires only one firmware configuration row—no Flutter UI changes.
+The Flutter Android/iOS app downloads the ESP32's saved module manifest after connecting and builds the controls dynamically. New supported modules can be created from **Edit layout** without changing Flutter or Arduino code.
 
 See [PROTOCOL.md](PROTOCOL.md) for every JSON message and field.
+
+## Current capabilities
+
+- Add, delete, hide, restore, rename, and reorder modules from the app.
+- Change a module between on/off output, PWM light, servo, reversible motor/winch, digital input, and analog input.
+- Assign compatible ESP32 pins with duplicate-pin and unsafe-pin validation.
+- Use touch-friendly toggles, PWM/servo sliders, live input readings, and an all-outputs-off safety control.
+- Save the complete layout on the ESP32 so it follows the controller to another phone.
+- Automatically reconnect to the last ESP32 and synchronize its current layout.
+- Use light, dark, or system theme and an in-app tutorial covering wiring and compatible pins.
+- Protect commands with encrypted BLE pairing, a configurable six-digit code, and first-phone ownership.
+- Return outputs to a safe state after the configurable Bluetooth disconnect timeout.
 
 ## Download the Android app
 
