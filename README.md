@@ -1,2 +1,140 @@
-# Bluetooth-Modular-ESP32-Controller-APK-
-An android app designed to link to and control an esp32. Modular pin controls (ON/OFF, PWM sliders, Servo control, etc.)
+# Modular ESP32 BLE Control
+
+The ESP32 defines its available hardware modules. The Flutter Android/iOS app downloads that manifest after connecting and builds the controls dynamically. Adding another supported module requires only one firmware configuration row—no Flutter UI changes.
+
+See [PROTOCOL.md](PROTOCOL.md) for every JSON message and field.
+
+## Architecture
+
+```text
+ESP32 module table + Preferences
+              ↓ versioned BLE manifest
+BLE service → validated models/state → widget registry → module cards
+              ↑ commands/events        ↕
+                                  layout editor
+```
+
+- `lib/services/ble_service.dart`: scan, reconnect, discovery, writes, notifications.
+- `lib/services/module_protocol.dart`: atomic chunked-manifest assembly.
+- `lib/models/module_model.dart`: base model, typed models, validation, unknown-type fallback.
+- `lib/controllers/app_controller.dart`: connection/sync state, commands, caching, slider debounce.
+- `lib/widgets/module_card.dart`: registry mapping capabilities to widgets.
+- `lib/screens/layout_editor_screen.dart`: reorder and enable/disable.
+- `lib/screens/module_details_screen.dart`: rename, validated pin change, and hide.
+- `esp32/ESP32_Control/ESP32_Control.ino`: module definitions, hardware behavior, persistence, validation, and fail-safe.
+
+The ESP32 is the source of truth. Names, enabled state, order, and assigned pins are stored in ESP32 NVS via `Preferences`, so they follow the controller across phones. The phone caches the last validated manifest by BLE device ID for quick restoration, but refreshes it after reconnecting. Hardware types, IDs, ranges, units, and behavior remain firmware-owned.
+
+## Requirements
+
+- Flutter 3.47.2 or compatible stable release
+- Android Studio with Android SDK/NDK; Xcode and CocoaPods on a Mac for iOS
+- Arduino IDE 2 or Arduino CLI
+- `esp32 by Espressif Systems` 3.x
+- Arduino libraries: `NimBLE-Arduino` 2.x, `ArduinoJson` 7.x, `ESP32Servo` 3.x
+- Flutter packages: `flutter_blue_plus 2.3.12`, `shared_preferences 2.5.5`
+
+```powershell
+flutter pub get
+flutter analyze
+flutter test
+flutter run
+```
+
+Use a physical phone. BLE scanning generally does not work in an emulator.
+
+## Upload the ESP32 firmware
+
+1. Open `esp32/ESP32_Control/ESP32_Control.ino`.
+2. Select **DOIT ESP32 DEVKIT V1** and the correct serial port.
+3. Upload. If it waits at `Connecting`, hold **BOOT** until transfer begins.
+4. Open Serial Monitor at 115200 baud. Look for `ESP32 modular BLE controller ready`.
+5. In the phone app, scan for `ESP32-Control`, connect, and wait for **Layout synchronized**.
+
+Arduino CLI equivalent:
+
+```powershell
+C:\ArduinoCLI\arduino-cli.exe compile --fqbn esp32:esp32:esp32doit-devkit-v1 esp32\ESP32_Control
+C:\ArduinoCLI\arduino-cli.exe upload -p COM_PORT --fqbn esp32:esp32:esp32doit-devkit-v1 esp32\ESP32_Control
+```
+
+Replace `COM_PORT` with the ESP32 port shown by `arduino-cli board list`.
+
+## Add or change a module
+
+All default definitions are together near the top of the sketch:
+
+```cpp
+Module modules[] = {
+  {"relay_1", ModuleType::TOGGLE, "Water Pump", 26, 0, 1, 1, "", 0, 0, nullptr, false},
+  {"pwm_1", ModuleType::SLIDER, "Brightness", 25, 0, 100, 1, "%", 0, 0, nullptr, false},
+};
+```
+
+Fields, in order:
+
+```text
+stable ID, type, default name, pin, minimum, maximum, step,
+unit, decimals, default value, button label, analog-input flag
+```
+
+To add a relay, copy a `TOGGLE` row, give it a new unique ID and unused output pin, then upload. Reconnect or pull down to refresh; the new ON/OFF card appears automatically. Multiple rows may use the same type, but IDs and assigned pins must be unique.
+
+To change type, pin, limits, unit, or default value, edit that row. Keep the ID unchanged so persisted layout stays associated with it. A pin can also be changed from **Edit layout → module details**; firmware rejects incompatible or conflicting assignments.
+
+Persisted names/pins/order override edited defaults. To adopt every newly edited default, press **Reset** in Edit layout. Removing a row from firmware permanently removes that hardware module. **Hide module** only sets `enabled=false` and can be reversed in Edit layout.
+
+To add an entirely new module type, add its enum/manifest behavior in firmware, a parser subtype in `module_model.dart`, and one widget builder registration in `module_card.dart`. Older apps safely show an unsupported card.
+
+## Default wiring
+
+Disconnect power while wiring. ESP32 GPIO is 3.3 V. Use a common ground for external supplies.
+
+| Module | Default pin | Wiring |
+|---|---:|---|
+| LED toggle | GPIO 2 | Built-in LED, or GPIO → 220–330 Ω → LED anode; cathode → GND |
+| Relay toggle | GPIO 26 | GPIO → 3.3 V-compatible relay-module IN; external rated module supply; common GND |
+| PWM slider | GPIO 25 | GPIO → driver/MOSFET input. Never drive a motor or power load directly. Add flyback protection for inductive loads. |
+| Servo | GPIO 18 | GPIO → signal; separate regulated 5–6 V servo supply; common GND |
+| Analog value | GPIO 34 | 0–3.3 V sensor output → GPIO 34; sensor GND → GND |
+
+Never connect mains voltage on a breadboard. Use rated isolation, fusing, drivers, and qualified help.
+
+## Safety and validation
+
+- Toggle and PWM outputs start off.
+- Toggle and PWM outputs return to their minimum after a BLE disconnect timeout (3 seconds).
+- Servo values, sliders, and other numbers are clamped and snapped to configured ranges.
+- Output modules cannot use ESP32 input-only/flash pins.
+- Analog modules require ADC1-capable pins, avoiding ADC2/Bluetooth conflicts.
+- A pin cannot belong to two modules.
+- Invalid IDs, commands, JSON, names, values, order lists, and pin changes return errors.
+- Module storage uses fixed arrays/character buffers; dynamic allocation is limited mainly to JSON/BLE library operations.
+
+## Android and iOS permissions
+
+Android `android/app/src/main/AndroidManifest.xml` declares BLE hardware plus Android 12+ `BLUETOOTH_SCAN` and `BLUETOOTH_CONNECT`. Legacy Bluetooth/location permissions are limited to older Android versions. On Android 12+, allow **Nearby devices**. On Android 11 or older, also allow Location and enable Location services.
+
+iOS `ios/Runner/Info.plist` contains `NSBluetoothAlwaysUsageDescription` and the older compatibility description. Build iOS on a Mac, choose an Apple development team in Xcode, connect a physical iPhone, then run `flutter run`. Background BLE is not enabled; automatic reconnect is best-effort while the app is running.
+
+## Test procedure
+
+1. **Relay/toggle:** connect, tap relay ON/OFF, confirm the selected state and GPIO 26 output.
+2. **PWM:** move Brightness; confirm the displayed value and PWM on GPIO 25. Writes are debounced by 180 ms.
+3. **Servo:** move Rudder from 0–180°; confirm physical travel and value response.
+4. **Analog:** vary a safe 0–3.3 V signal on GPIO 34; confirm the card updates about once per second.
+5. **Rename:** Edit layout → module pencil → change name → Save. Reconnect and confirm it remains.
+6. **Rearrange:** drag module rows in Edit layout. Reconnect and confirm the order remains.
+7. **Hide/enable:** turn a row off in Edit layout; confirm it disappears from the main screen, then re-enable it.
+8. **Disconnect:** turn Bluetooth off. After 3 seconds confirm toggle/PWM outputs are safe-off. Turn it back on and confirm reconnect plus synchronization.
+9. **Add module:** add another unique `TOGGLE` row on a valid unused pin, upload, reconnect, and confirm the new card appears without changing Flutter.
+10. **Invalid pin:** try assigning an already-used or input-only pin to a toggle; confirm the app shows the firmware error.
+
+## Troubleshooting
+
+- **No device found:** use a real phone, confirm Serial Monitor is ready, grant Bluetooth/Nearby Devices, close other BLE apps, and test with nRF Connect.
+- **Connects but does not synchronize:** confirm all three UUIDs match and the phone shows firmware protocol version 1. Pull down to request the manifest again.
+- **Configuration reverts:** press Save and wait for the success/configuration notification. Reset layout intentionally restores firmware defaults.
+- **Output resets ESP32:** use a separate adequate load/servo supply with common ground.
+- **Compile says `ledcAttach` missing:** install Espressif ESP32 core 3.x.
+- **Old phone layout:** tap **Forget saved ESP32**, reconnect, or pull down to force a fresh manifest.

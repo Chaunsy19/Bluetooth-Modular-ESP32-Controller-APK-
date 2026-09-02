@@ -1,0 +1,81 @@
+I want to build a mobile app that connects to an ESP32 DevKit V1 over Bluetooth and controls electronics connected to the ESP32.
+
+Build this as a cross-platform app for Android and iOS using Flutter. Use Bluetooth Low Energy (BLE), preferably with the flutter_blue_plus package.
+
+Project requirements:
+
+1. Mobile app
+- Display nearby ESP32 BLE devices.
+- Allow the user to scan, select, connect, and disconnect from the ESP32.
+- Show connection status clearly.
+- Automatically reconnect to the last connected ESP32 when possible.
+- Provide a clean, simple, touch-friendly interface.
+- Organize controls into device sections.
+
+2. ESP32 communication
+- Create ESP32 Arduino code using the Arduino framework.
+- Advertise as a BLE device with a recognizable name such as “ESP32-Control”.
+- Create one custom BLE service and characteristic for receiving commands.
+- Create a notification characteristic or allow the ESP32 to send status updates back to the phone.
+- Use simple JSON commands, for example:
+
+  {"device":"led1","action":"set","value":true}
+  {"device":"motor1","action":"speed","value":75}
+  {"device":"servo1","action":"angle","value":90}
+  {"device":"relay1","action":"set","value":false}
+
+- Return JSON status messages such as:
+
+  {"device":"led1","status":"ok","value":true}
+  {"device":"servo1","status":"ok","value":90}
+  {"error":"Unknown device"}
+
+3. Initial controls
+Include example controls for:
+- Digital output / LED: on and off button.
+- Relay: on and off button.
+- PWM output: slider from 0 to 100 percent.
+- Servo: slider from 0 to 180 degrees.
+- Digital input: display HIGH or LOW.
+- Analog input: display the current ADC value.
+- A general-purpose command button that can send a custom JSON command.
+
+4. ESP32 pin configuration
+Put all pin assignments near the top of the ESP32 code so they are easy to change. Include example pins for:
+- LED
+- Relay
+- PWM output
+- Servo
+- Digital input
+- Analog input
+
+Use safe startup behavior:
+- Turn outputs off when the ESP32 boots.
+- Turn outputs off if the Bluetooth connection is lost for a configurable amount of time.
+- Validate all received commands.
+- Clamp servo, PWM, and other numeric values to safe ranges.
+
+5. App features
+- Use sliders for servo angle and PWM.
+- Use buttons for toggles.
+- Show the last command sent and the last response received.
+- Display errors in a readable way.
+- Prevent controls from being used when disconnected.
+- Add a settings page for changing the ESP32 device name, BLE UUIDs, and optional pin labels.
+- Store basic settings locally on the phone.
+
+6. Deliverables
+Provide:
+- Complete Flutter project structure.
+- Complete ESP32 Arduino sketch.
+- Required library/package installation instructions.
+- BLE service and characteristic UUIDs.
+- Wiring examples for each controlled device.
+- Instructions for uploading the ESP32 code.
+- Instructions for running the mobile app on Android and iOS.
+- A clear explanation of how the phone and ESP32 communicate.
+- Troubleshooting instructions for pairing, permissions, BLE scanning, and connection failures.
+
+Use separate files and clean architecture where practical. Do not leave placeholder code in the final implementation. Explain any platform-specific permissions required, especially Android Bluetooth permissions and iOS Bluetooth permissions.
+
+Before writing the implementation, briefly explain the proposed architecture and list any assumptions.

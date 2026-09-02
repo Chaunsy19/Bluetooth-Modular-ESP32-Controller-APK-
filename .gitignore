@@ -1,0 +1,11 @@
+.dart_tool/
+.flutter-plugins*
+.idea/
+.metadata
+build/
+android/.gradle/
+android/local.properties
+ios/Flutter/ephemeral/
+ios/Pods/
+ios/Runner.xcworkspace/
+*.iml
