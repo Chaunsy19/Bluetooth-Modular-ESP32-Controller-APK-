@@ -4,6 +4,21 @@ The ESP32 defines its available hardware modules. The Flutter Android/iOS app do
 
 See [PROTOCOL.md](PROTOCOL.md) for every JSON message and field.
 
+## Download the Android app
+
+Open the repository's [Releases page](https://github.com/Chaunsy19/Bluetooth-Modular-ESP32-Controller-APK-/releases), select the newest release, and download the `.apk` file under **Assets**.
+
+On the Android phone, open the downloaded APK and allow installation from that browser or file manager when Android asks. Google Play Protect may display a warning because this app is installed directly instead of through the Play Store.
+
+Maintainers create a release by pushing a version tag, for example:
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions then checks the project, builds the Android APK, and attaches it to a new GitHub Release automatically.
+
 ## Architecture
 
 ```text
