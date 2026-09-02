@@ -3,6 +3,7 @@
 .idea/
 .metadata
 build/
+.build/
 android/.gradle/
 android/local.properties
 ios/Flutter/ephemeral/
