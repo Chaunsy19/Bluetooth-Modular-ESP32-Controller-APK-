@@ -4,6 +4,7 @@ import '../services/ble_service.dart';
 import '../widgets/module_card.dart';
 import 'layout_editor_screen.dart';
 import 'settings_screen.dart';
+import 'tutorial_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final AppController controller;
@@ -46,6 +47,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         builder: (_) => LayoutEditorScreen(controller: c))),
             icon: const Icon(Icons.dashboard_customize)),
         IconButton(
+            tooltip: 'Tutorial',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const TutorialScreen())),
+            icon: const Icon(Icons.school_outlined)),
+        IconButton(
             tooltip: 'Settings',
             onPressed: () => Navigator.push(
                 context,
@@ -83,12 +89,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: const Text('Advanced'),
                     childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
                     children: [
+                      Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text('Custom JSON command',
+                                  style:
+                                      Theme.of(context).textTheme.labelLarge))),
                       TextField(
                           controller: custom,
                           minLines: 2,
                           maxLines: 5,
                           decoration: const InputDecoration(
-                              labelText: 'Custom JSON command')),
+                              hintText: '{"command":"get_modules"}',
+                              floatingLabelBehavior:
+                                  FloatingLabelBehavior.never)),
                       const SizedBox(height: 10),
                       SizedBox(
                           width: double.infinity,
