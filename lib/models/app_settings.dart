@@ -8,12 +8,16 @@ class AppSettings {
   final String serviceUuid;
   final String commandUuid;
   final String statusUuid;
+  final String pairingCode;
+  final String themeMode;
 
   const AppSettings({
     this.deviceName = defaultDeviceName,
     this.serviceUuid = defaultServiceUuid,
     this.commandUuid = defaultCommandUuid,
     this.statusUuid = defaultStatusUuid,
+    this.pairingCode = '123456',
+    this.themeMode = 'system',
   });
 
   AppSettings copyWith({
@@ -21,11 +25,15 @@ class AppSettings {
     String? serviceUuid,
     String? commandUuid,
     String? statusUuid,
+    String? pairingCode,
+    String? themeMode,
   }) =>
       AppSettings(
         deviceName: deviceName ?? this.deviceName,
         serviceUuid: serviceUuid ?? this.serviceUuid,
         commandUuid: commandUuid ?? this.commandUuid,
         statusUuid: statusUuid ?? this.statusUuid,
+        pairingCode: pairingCode ?? this.pairingCode,
+        themeMode: themeMode ?? this.themeMode,
       );
 }

@@ -12,6 +12,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _form = GlobalKey<FormState>();
   late final Map<String, TextEditingController> _fields;
+  late String _themeMode;
 
   @override
   void initState() {
@@ -22,7 +23,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'service': TextEditingController(text: s.serviceUuid),
       'command': TextEditingController(text: s.commandUuid),
       'status': TextEditingController(text: s.statusUuid),
+      'pairing': TextEditingController(text: s.pairingCode),
     };
+    _themeMode = s.themeMode;
   }
 
   @override
@@ -72,6 +75,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   controller: _fields['status'],
                   decoration: const InputDecoration(labelText: 'Status UUID'),
                   validator: _uuid),
+              const SizedBox(height: 16),
+              TextFormField(
+                  controller: _fields['pairing'],
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  decoration: const InputDecoration(
+                      labelText: 'BLE pairing code',
+                      helperText:
+                          'Must match the code configured in the ESP32 firmware.'),
+                  validator: (value) => RegExp(r'^\d{6}$').hasMatch(value ?? '')
+                      ? null
+                      : 'Enter exactly 6 digits'),
+              const SizedBox(height: 24),
+              Text('Appearance', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                  initialValue: _themeMode,
+                  decoration: const InputDecoration(labelText: 'Theme'),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'system', child: Text('Use phone setting')),
+                    DropdownMenuItem(value: 'light', child: Text('Light')),
+                    DropdownMenuItem(value: 'dark', child: Text('Dark')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _themeMode = value);
+                  }),
               const SizedBox(height: 24),
               FilledButton(
                   onPressed: _save, child: const Text('Save settings')),
@@ -88,6 +118,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       serviceUuid: _fields['service']!.text.trim(),
       commandUuid: _fields['command']!.text.trim(),
       statusUuid: _fields['status']!.text.trim(),
+      pairingCode: _fields['pairing']!.text.trim(),
+      themeMode: _themeMode,
     ));
     if (mounted) Navigator.pop(context);
   }

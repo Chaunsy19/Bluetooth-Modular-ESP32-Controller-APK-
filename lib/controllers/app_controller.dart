@@ -90,6 +90,7 @@ class AppController extends ChangeNotifier {
   Future<void> disconnect({bool forget = false}) async {
     await ble.disconnect();
     if (forget) {
+      await ble.removeBond();
       await storage.clearLastDeviceId();
       modules = const [];
       manifestRevision = 0;

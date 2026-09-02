@@ -7,5 +7,7 @@ void main() {
     expect(settings.serviceUuid.length, 36);
     expect(settings.commandUuid.length, 36);
     expect(settings.statusUuid.length, 36);
+    expect(settings.pairingCode, matches(RegExp(r'^\d{6}$')));
+    expect(settings.themeMode, 'system');
   });
 }

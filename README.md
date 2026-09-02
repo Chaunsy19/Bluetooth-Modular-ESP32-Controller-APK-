@@ -23,6 +23,8 @@ git push origin v1.0.0
 
 GitHub Actions then checks the project, builds the Android APK, and attaches it to a new GitHub Release automatically.
 
+Android production releases use application ID `com.chaunsy19.esp32control` and a permanent private signing key. The ignored files `android/app/upload-keystore.jks` and `android/key.properties` must never be committed. GitHub Actions requires the repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. Back up the keystore and its credentials securely; losing them prevents future APKs from updating existing installations.
+
 ## Architecture
 
 ```text
@@ -72,6 +74,8 @@ Use a physical phone. BLE scanning generally does not work in an emulator.
 3. Upload. If it waits at `Connecting`, hold **BOOT** until transfer begins.
 4. Open Serial Monitor at 115200 baud. Look for `ESP32 modular BLE controller ready`.
 5. In the phone app, scan for `ESP32-Control`, connect, and wait for **Layout synchronized**.
+
+The first phone to complete encrypted pairing becomes the controller owner. Set a unique six-digit `BLE_PAIRING_CODE` near the top of the sketch and enter the same code in App Settings. To transfer ownership, hold the ESP32 **BOOT** button while powering it on for at least three seconds, then use **Forget ESP32 and phone pairing** in the old phone app. On iOS, also remove the device from Bluetooth settings if necessary.
 
 Arduino CLI equivalent:
 
@@ -129,10 +133,11 @@ Never connect mains voltage on a breadboard. Use rated isolation, fusing, driver
 - Toggle and PWM outputs start off.
 - Toggle and PWM outputs return to their minimum after a BLE disconnect timeout (3 seconds).
 - Servo values, sliders, and other numbers are clamped and snapped to configured ranges.
-- Output modules cannot use ESP32 input-only/flash pins.
+- Firmware accepts only the recommended DevKit V1 pins: outputs on GPIO 13, 14, 16–19, 21–23, 25–27, 32, or 33; analog inputs on GPIO 32–36 or 39; digital inputs on those output pins plus GPIO 34–36 or 39.
 - Analog modules require ADC1-capable pins, avoiding ADC2/Bluetooth conflicts.
 - A pin cannot belong to two modules.
 - Invalid IDs, commands, JSON, names, values, order lists, and pin changes return errors.
+- BLE commands and status require encrypted, bonded connections. The first paired phone is retained as owner until a physical BOOT-button reset.
 - Module storage uses fixed arrays/character buffers; dynamic allocation is limited mainly to JSON/BLE library operations.
 
 ## Android and iOS permissions

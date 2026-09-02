@@ -41,7 +41,19 @@ class TutorialScreen extends StatelessWidget {
           _warning(
             context,
             'Pins to avoid',
-            'Never use GPIO 6–11 because they connect to flash. Avoid GPIO 1 and 3 because they handle USB serial. GPIO 0, 2, 5, 12, and 15 are boot pins and attached circuits can prevent startup.',
+            'The firmware rejects GPIO 6–11 because they connect to flash, GPIO 1 and 3 because they handle USB serial, and GPIO 0, 2, 5, 12, and 15 because attached circuits can prevent startup.',
+          ),
+          _section(
+            context,
+            Icons.lock_outline,
+            'Pairing and ownership',
+            const [
+              'BLE commands and status messages are encrypted after pairing.',
+              'The first phone that pairs becomes the controller owner. Other phones are rejected.',
+              'The six-digit code in App Settings must match BLE_PAIRING_CODE in the firmware.',
+              'To transfer ownership, hold the ESP32 BOOT button while powering on for at least 3 seconds, then tap “Forget ESP32 and phone pairing” in the app.',
+              'Give every controller sold or shared its own pairing code.',
+            ],
           ),
           _section(
             context,

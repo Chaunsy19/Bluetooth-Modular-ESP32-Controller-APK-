@@ -15,19 +15,28 @@ class Esp32ControlApp extends StatelessWidget {
   final AppController controller;
   const Esp32ControlApp({super.key, required this.controller});
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        title: 'ESP32 Control',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-            colorScheme:
-                ColorScheme.fromSeed(seedColor: const Color(0xff006a6a)),
-            useMaterial3: true,
-            inputDecorationTheme: const InputDecorationTheme(
-                filled: true,
-                floatingLabelBehavior: FloatingLabelBehavior.always,
-                border: OutlineInputBorder(),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 16, vertical: 16))),
-        home: HomeScreen(controller: controller),
-      );
+  Widget build(BuildContext context) => AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => MaterialApp(
+            title: 'ESP32 Control',
+            debugShowCheckedModeBanner: false,
+            themeMode: switch (controller.settings.themeMode) {
+              'light' => ThemeMode.light,
+              'dark' => ThemeMode.dark,
+              _ => ThemeMode.system,
+            },
+            theme: _theme(Brightness.light),
+            darkTheme: _theme(Brightness.dark),
+            home: HomeScreen(controller: controller),
+          ));
+
+  ThemeData _theme(Brightness brightness) => ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xff006a6a), brightness: brightness),
+      useMaterial3: true,
+      inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16)));
 }

@@ -10,3 +10,4 @@ ios/Flutter/ephemeral/
 ios/Pods/
 ios/Runner.xcworkspace/
 *.iml
+.private/

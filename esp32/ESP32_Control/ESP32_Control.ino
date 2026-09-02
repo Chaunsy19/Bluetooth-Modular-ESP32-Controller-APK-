@@ -60,10 +60,14 @@ constexpr uint32_t DISCONNECT_SAFE_OFF_MS = 3000;
 constexpr uint32_t SENSOR_REPORT_MS = 1000;
 constexpr uint32_t PWM_FREQUENCY = 5000;
 constexpr uint8_t PWM_RESOLUTION_BITS = 8;
+constexpr uint32_t BLE_PAIRING_CODE = 123456; // Give each product unit a unique six-digit code.
+constexpr uint8_t OWNERSHIP_RESET_PIN = 0;    // Hold the BOOT button while powering on for 3 seconds.
+constexpr uint32_t OWNERSHIP_RESET_HOLD_MS = 3000;
 // ========================================================
 
 NimBLECharacteristic* statusCharacteristic = nullptr;
 Preferences preferences;
+Preferences securityPreferences;
 Servo servos[MAX_MODULES];
 bool clientConnected = false;
 bool safeOffApplied = true;
@@ -71,6 +75,7 @@ bool manifestRequested = false;
 uint32_t disconnectedAt = 0;
 uint32_t lastSensorReport = 0;
 uint32_t configRevision = 1;
+bool ownerClaimed = false;
 
 const char* typeName(ModuleType type) {
   switch (type) {
@@ -91,11 +96,20 @@ int findModule(const char* id) {
 }
 
 bool pinCanOutput(int pin) {
-  return pin >= 0 && pin <= 33 && !(pin >= 6 && pin <= 11) && pin != 20 && pin != 24 && pin != 28 && pin != 29 && pin != 30 && pin != 31;
+  switch (pin) {
+    case 13: case 14: case 16: case 17: case 18: case 19:
+    case 21: case 22: case 23: case 25: case 26: case 27:
+    case 32: case 33: return true;
+    default: return false;
+  }
 }
 
 bool pinCanAnalogInput(int pin) {
   return pin == 32 || pin == 33 || pin == 34 || pin == 35 || pin == 36 || pin == 39;
+}
+
+bool pinCanDigitalInput(int pin) {
+  return pinCanOutput(pin) || pin == 34 || pin == 35 || pin == 36 || pin == 39;
 }
 
 bool pinUsedByOther(int pin, int moduleIndex) {
@@ -113,7 +127,7 @@ bool validPinSet(int index, ModuleType type, bool analogInput, int pin, int pin2
     return pin != pin2 && pin != pin3 && pin2 != pin3 && pinCanOutput(pin) && pinCanOutput(pin2) && pinCanOutput(pin3);
   }
   if (pin2 != -1 || pin3 != -1) return false;
-  if (type == ModuleType::VALUE) return analogInput ? pinCanAnalogInput(pin) : pin >= 0 && pin <= 39 && !(pin >= 6 && pin <= 11);
+  if (type == ModuleType::VALUE) return analogInput ? pinCanAnalogInput(pin) : pinCanDigitalInput(pin);
   return pinCanOutput(pin);
 }
 
@@ -575,6 +589,11 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
 };
 
 class ServerCallbacks : public NimBLEServerCallbacks {
+  uint32_t onPassKeyDisplay() override {
+    Serial.printf("BLE pairing code: %06lu\n", (unsigned long)BLE_PAIRING_CODE);
+    return BLE_PAIRING_CODE;
+  }
+
   void onConnect(NimBLEServer* server, NimBLEConnInfo& info) override {
     clientConnected = true; safeOffApplied = false;
     const int status = findModule("status_1"); if (status >= 0) strlcpy(modules[status].text, "Connected", sizeof(modules[status].text));
@@ -582,25 +601,69 @@ class ServerCallbacks : public NimBLEServerCallbacks {
   void onDisconnect(NimBLEServer* server, NimBLEConnInfo& info, int reason) override {
     clientConnected = false; disconnectedAt = millis(); manifestRequested = false; NimBLEDevice::startAdvertising();
   }
+
+  void onAuthenticationComplete(NimBLEConnInfo& info) override {
+    if (!info.isEncrypted() || !info.isBonded()) {
+      Serial.println("BLE security failed; disconnecting client");
+      NimBLEDevice::getServer()->disconnect(info.getConnHandle());
+      return;
+    }
+    if (!ownerClaimed) {
+      ownerClaimed = true;
+      securityPreferences.putBool("claimed", true);
+      NimBLEDevice::whiteListAdd(info.getAddress());
+      NimBLEDevice::getAdvertising()->setScanFilter(false, true);
+      Serial.printf("Controller claimed by %s\n", info.getAddress().toString().c_str());
+    }
+    Serial.printf("Encrypted BLE connection: %s\n", info.getAddress().toString().c_str());
+  }
 };
 
 void setup() {
   Serial.begin(115200);
+  pinMode(OWNERSHIP_RESET_PIN, INPUT_PULLUP);
+  const bool resetRequested = digitalRead(OWNERSHIP_RESET_PIN) == LOW;
+  bool resetConfirmed = false;
+  if (resetRequested) {
+    Serial.println("Hold BOOT for 3 seconds to clear phone ownership...");
+    const uint32_t started = millis();
+    while (digitalRead(OWNERSHIP_RESET_PIN) == LOW && millis() - started < OWNERSHIP_RESET_HOLD_MS) delay(25);
+    resetConfirmed = digitalRead(OWNERSHIP_RESET_PIN) == LOW && millis() - started >= OWNERSHIP_RESET_HOLD_MS;
+  }
   preferences.begin("modules", false);
+  securityPreferences.begin("security", false);
+  ownerClaimed = securityPreferences.getBool("claimed", false);
   loadConfiguration();
   for (uint8_t i = 0; i < moduleCount; ++i) configureModulePin(i);
   const int status = findModule("status_1"); if (status >= 0) strlcpy(modules[status].text, "Ready", sizeof(modules[status].text));
   safeOutputsOff();
 
   NimBLEDevice::init(DEVICE_NAME); NimBLEDevice::setMTU(256);
+  NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);
+  NimBLEDevice::setSecurityPasskey(BLE_PAIRING_CODE);
+  NimBLEDevice::setSecurityAuth(true, true, true);
+  if (resetConfirmed) {
+    NimBLEDevice::deleteAllBonds();
+    securityPreferences.clear();
+    ownerClaimed = false;
+    Serial.println("Phone ownership and BLE bonds cleared");
+  }
+  if (ownerClaimed && NimBLEDevice::getNumBonds() > 0) {
+    NimBLEDevice::whiteListAdd(NimBLEDevice::getBondedAddress(0));
+  } else if (ownerClaimed) {
+    securityPreferences.putBool("claimed", false);
+    ownerClaimed = false;
+  }
   NimBLEServer* server = NimBLEDevice::createServer(); server->setCallbacks(new ServerCallbacks());
   NimBLEService* service = server->createService(SERVICE_UUID);
-  NimBLECharacteristic* command = service->createCharacteristic(COMMAND_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+  NimBLECharacteristic* command = service->createCharacteristic(COMMAND_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR | NIMBLE_PROPERTY::WRITE_ENC);
   command->setCallbacks(new CommandCallbacks());
-  statusCharacteristic = service->createCharacteristic(STATUS_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  statusCharacteristic = service->createCharacteristic(STATUS_UUID, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::READ_ENC);
   statusCharacteristic->setValue("{\"event\":\"ready\"}"); service->start();
   NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising(); advertising->setName(DEVICE_NAME);
-  advertising->addServiceUUID(SERVICE_UUID); advertising->enableScanResponse(true); advertising->start();
+  advertising->addServiceUUID(SERVICE_UUID); advertising->enableScanResponse(true);
+  if (ownerClaimed) advertising->setScanFilter(false, true);
+  advertising->start();
   Serial.println("ESP32 modular BLE controller ready");
 }
 

@@ -213,7 +213,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (!c.connected)
                     TextButton(
                         onPressed: () => c.disconnect(forget: true),
-                        child: const Text('Forget saved ESP32')),
+                        child: const Text('Forget ESP32 and phone pairing')),
                 ])));
   }
 }

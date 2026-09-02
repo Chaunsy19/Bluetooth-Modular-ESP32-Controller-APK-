@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../models/app_settings.dart';
 
@@ -116,6 +118,10 @@ class BleService {
   Future<void> _prepareCharacteristics() async {
     try {
       _state.add(BleLinkState.connecting);
+      if (Platform.isAndroid) {
+        await _device!.createBond(
+            pin: Uint8List.fromList(utf8.encode(_settings.pairingCode)));
+      }
       final services = await _device!.discoverServices();
       final service = services
           .where((s) => s.uuid == Guid(_settings.serviceUuid))
@@ -167,6 +173,15 @@ class BleService {
     await _device?.disconnect();
     _command = null;
     _state.add(BleLinkState.disconnected);
+  }
+
+  Future<void> removeBond() async {
+    if (!Platform.isAndroid || _device == null) return;
+    try {
+      await _device!.removeBond();
+    } catch (e) {
+      _errors.add('Could not remove Android pairing: ${_friendlyError(e)}');
+    }
   }
 
   String _friendlyError(Object error) =>

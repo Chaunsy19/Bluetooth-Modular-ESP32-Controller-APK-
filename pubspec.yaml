@@ -1,7 +1,7 @@
 name: esp32_control
 description: Cross-platform BLE controller for an ESP32.
 publish_to: none
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: '>=3.6.0 <4.0.0'

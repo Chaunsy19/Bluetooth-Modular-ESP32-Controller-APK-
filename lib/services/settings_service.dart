@@ -15,6 +15,9 @@ class SettingsService {
       commandUuid:
           await _prefs.getString('command_uuid') ?? defaults.commandUuid,
       statusUuid: await _prefs.getString('status_uuid') ?? defaults.statusUuid,
+      pairingCode:
+          await _prefs.getString('pairing_code') ?? defaults.pairingCode,
+      themeMode: await _prefs.getString('theme_mode') ?? defaults.themeMode,
     );
   }
 
@@ -23,6 +26,8 @@ class SettingsService {
     await _prefs.setString('service_uuid', value.serviceUuid);
     await _prefs.setString('command_uuid', value.commandUuid);
     await _prefs.setString('status_uuid', value.statusUuid);
+    await _prefs.setString('pairing_code', value.pairingCode);
+    await _prefs.setString('theme_mode', value.themeMode);
   }
 
   Future<String?> getLastDeviceId() => _prefs.getString('last_device_id');
