@@ -10,6 +10,7 @@ class ModuleWidgetRegistry {
     'toggle': _toggle,
     'slider': _slider,
     'servo': _slider,
+    'motor': _motor,
     'value': _value,
     'button': _button,
     'text': _text,
@@ -86,12 +87,37 @@ class ModuleWidgetRegistry {
   }
 
   static Widget _value(BuildContext context, ModuleModel m, AppController c) {
-    final value = m.value is num
-        ? (m.value as num).toStringAsFixed(m.decimals)
-        : m.value?.toString() ?? '—';
+    final value = !m.analogInput && m.value is num
+        ? ((m.value as num) == 0 ? 'LOW' : 'HIGH')
+        : m.value is num
+            ? (m.value as num).toStringAsFixed(m.decimals)
+            : m.value?.toString() ?? '—';
     return Text('$value${m.unit.isEmpty ? '' : ' ${m.unit}'}',
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.headlineMedium);
+  }
+
+  static Widget _motor(BuildContext context, ModuleModel m, AppController c) {
+    final raw = (m.value as num).toDouble().clamp(-100.0, 100.0);
+    return Column(children: [
+      Text(
+          raw == 0
+              ? 'STOP'
+              : '${raw.abs().round()}% ${raw > 0 ? 'FORWARD' : 'REVERSE'}',
+          style: Theme.of(context).textTheme.headlineSmall),
+      Slider(
+        value: raw,
+        min: -100,
+        max: 100,
+        divisions: 200,
+        label: raw.round().toString(),
+        onChanged: c.connected
+            ? (value) => c.setModuleValue(m.id, value.round(), debounce: true)
+            : null,
+        onChangeEnd: c.connected ? (_) => c.setModuleValue(m.id, 0) : null,
+      ),
+      const Text('Hold to run • release to stop'),
+    ]);
   }
 
   static Widget _button(BuildContext context, ModuleModel m, AppController c) =>
@@ -115,6 +141,7 @@ class ModuleWidgetRegistry {
         'toggle' => Icons.toggle_on,
         'slider' => Icons.tune,
         'servo' => Icons.rotate_right,
+        'motor' => Icons.settings_input_component,
         'value' => Icons.monitor_heart_outlined,
         'button' => Icons.smart_button,
         'text' => Icons.info_outline,

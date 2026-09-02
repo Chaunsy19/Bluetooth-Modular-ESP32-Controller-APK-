@@ -103,6 +103,7 @@ class AppController extends ChangeNotifier {
     _updateModuleValue(moduleId, value);
     notifyListeners();
     if (!debounce) {
+      _sliderTimers.remove(moduleId)?.cancel();
       return _send(
           {'command': 'set_value', 'module_id': moduleId, 'value': value});
     }
@@ -157,6 +158,10 @@ class AppController extends ChangeNotifier {
     await _sendConfiguration(
         {'command': 'set_module_pin', 'module_id': id, 'pin': pin});
   }
+
+  Future<void> updateModule(String id, Map<String, dynamic> definition) =>
+      _sendConfiguration(
+          {'command': 'update_module', 'module_id': id, 'module': definition});
 
   Future<void> setModuleOrder(List<String> order) =>
       _sendConfiguration({'command': 'set_module_order', 'order': order});

@@ -10,6 +10,9 @@ class ModuleModel {
   final String type;
   final String name;
   final int? pin;
+  final int? pin2;
+  final int? pin3;
+  final bool analogInput;
   final bool enabled;
   final bool deletable;
   final int order;
@@ -27,6 +30,9 @@ class ModuleModel {
     required this.type,
     required this.name,
     this.pin,
+    this.pin2,
+    this.pin3,
+    this.analogInput = false,
     this.enabled = true,
     this.deletable = false,
     this.order = 0,
@@ -41,11 +47,12 @@ class ModuleModel {
   });
 
   bool get isOutput =>
-      const {'toggle', 'slider', 'servo', 'button'}.contains(type);
+      const {'toggle', 'slider', 'servo', 'motor', 'button'}.contains(type);
   bool get isSupported => const {
         'toggle',
         'slider',
         'servo',
+        'motor',
         'value',
         'button',
         'text'
@@ -90,6 +97,10 @@ class ModuleModel {
       type: type,
       name: name,
       pin: number('pin')?.toInt(),
+      pin2: number('pin2')?.toInt(),
+      pin3: number('pin3')?.toInt(),
+      analogInput:
+          json['analog_input'] is bool ? json['analog_input'] as bool : false,
       enabled: json['enabled'] is bool ? json['enabled'] as bool : true,
       deletable: json['deletable'] is bool ? json['deletable'] as bool : false,
       order: number('order')?.toInt() ?? 0,
@@ -114,6 +125,12 @@ class ModuleModel {
       case 'servo':
         _validateRange(common);
         return ServoModule.from(common);
+      case 'motor':
+        _validateRange(common);
+        if (common.pin2 == null || common.pin3 == null) {
+          throw ProtocolException('$id motor requires three pins.');
+        }
+        return MotorModule.from(common);
       case 'value':
         return ValueModule.from(common);
       case 'button':
@@ -140,6 +157,9 @@ class ModuleModel {
         'type': type,
         'name': name,
         if (pin != null) 'pin': pin,
+        if (pin2 != null) 'pin2': pin2,
+        if (pin3 != null) 'pin3': pin3,
+        if (type == 'value') 'analog_input': analogInput,
         'enabled': enabled,
         'deletable': deletable,
         'order': order,
@@ -172,6 +192,9 @@ class ToggleModule extends ModuleModel {
             type: m.type,
             name: m.name,
             pin: m.pin,
+            pin2: m.pin2,
+            pin3: m.pin3,
+            analogInput: m.analogInput,
             enabled: m.enabled,
             deletable: m.deletable,
             order: m.order,
@@ -192,6 +215,9 @@ class SliderModule extends ModuleModel {
             type: m.type,
             name: m.name,
             pin: m.pin,
+            pin2: m.pin2,
+            pin3: m.pin3,
+            analogInput: m.analogInput,
             enabled: m.enabled,
             deletable: m.deletable,
             order: m.order,
@@ -212,6 +238,32 @@ class ServoModule extends ModuleModel {
             type: m.type,
             name: m.name,
             pin: m.pin,
+            pin2: m.pin2,
+            pin3: m.pin3,
+            analogInput: m.analogInput,
+            enabled: m.enabled,
+            deletable: m.deletable,
+            order: m.order,
+            value: m.value,
+            min: m.min,
+            max: m.max,
+            step: m.step,
+            unit: m.unit,
+            decimals: m.decimals,
+            label: m.label,
+            commandValue: m.commandValue);
+}
+
+class MotorModule extends ModuleModel {
+  MotorModule.from(ModuleModel m)
+      : super(
+            id: m.id,
+            type: m.type,
+            name: m.name,
+            pin: m.pin,
+            pin2: m.pin2,
+            pin3: m.pin3,
+            analogInput: m.analogInput,
             enabled: m.enabled,
             deletable: m.deletable,
             order: m.order,
@@ -232,6 +284,9 @@ class ValueModule extends ModuleModel {
             type: m.type,
             name: m.name,
             pin: m.pin,
+            pin2: m.pin2,
+            pin3: m.pin3,
+            analogInput: m.analogInput,
             enabled: m.enabled,
             deletable: m.deletable,
             order: m.order,
@@ -252,6 +307,9 @@ class ButtonModule extends ModuleModel {
             type: m.type,
             name: m.name,
             pin: m.pin,
+            pin2: m.pin2,
+            pin3: m.pin3,
+            analogInput: m.analogInput,
             enabled: m.enabled,
             deletable: m.deletable,
             order: m.order,
@@ -272,6 +330,9 @@ class TextModule extends ModuleModel {
             type: m.type,
             name: m.name,
             pin: m.pin,
+            pin2: m.pin2,
+            pin3: m.pin3,
+            analogInput: m.analogInput,
             enabled: m.enabled,
             deletable: m.deletable,
             order: m.order,
@@ -292,6 +353,9 @@ class UnsupportedModule extends ModuleModel {
             type: m.type,
             name: m.name,
             pin: m.pin,
+            pin2: m.pin2,
+            pin3: m.pin3,
+            analogInput: m.analogInput,
             enabled: m.enabled,
             deletable: m.deletable,
             order: m.order,

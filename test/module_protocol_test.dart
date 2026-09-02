@@ -74,4 +74,31 @@ void main() {
             }),
         throwsA(isA<ProtocolException>()));
   });
+
+  test('parses reversible motor and input hardware metadata', () {
+    final motor = ModuleModel.fromJson({
+      'id': 'winch_1',
+      'type': 'motor',
+      'name': 'Winch',
+      'pin': 25,
+      'pin2': 26,
+      'pin3': 27,
+      'value': 0,
+      'min': -100,
+      'max': 100,
+      'step': 1,
+    });
+    final input = ModuleModel.fromJson({
+      'id': 'battery_1',
+      'type': 'value',
+      'name': 'Battery sensor',
+      'pin': 34,
+      'analog_input': true,
+      'value': 2048,
+    });
+    expect(motor, isA<MotorModule>());
+    expect(motor.pin2, 26);
+    expect(motor.pin3, 27);
+    expect(input.analogInput, isTrue);
+  });
 }

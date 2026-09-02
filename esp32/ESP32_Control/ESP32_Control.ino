@@ -8,7 +8,8 @@
 // Add, remove, or edit rows here. The Flutter app discovers them automatically.
 // IDs must stay unique and should never change after deployment. Names may change.
 constexpr uint8_t MAX_MODULES = 12;
-enum class ModuleType : uint8_t { TOGGLE, SLIDER, SERVO, VALUE, BUTTON, TEXT };
+// Values 0-5 are kept stable so configurations saved by older firmware migrate safely.
+enum class ModuleType : uint8_t { TOGGLE = 0, SLIDER = 1, SERVO = 2, VALUE = 3, BUTTON = 4, TEXT = 5, MOTOR = 6 };
 
 struct Module {
   const char* id;
@@ -29,6 +30,8 @@ struct Module {
   uint8_t order;
   double value;
   char text[48];
+  int8_t pin2;             // Optional secondary output (motor direction A)
+  int8_t pin3;             // Optional tertiary output (motor direction B)
 };
 
 constexpr uint8_t DEFAULT_MODULE_COUNT = 7;
@@ -74,6 +77,7 @@ const char* typeName(ModuleType type) {
     case ModuleType::TOGGLE: return "toggle";
     case ModuleType::SLIDER: return "slider";
     case ModuleType::SERVO: return "servo";
+    case ModuleType::MOTOR: return "motor";
     case ModuleType::VALUE: return "value";
     case ModuleType::BUTTON: return "button";
     case ModuleType::TEXT: return "text";
@@ -96,16 +100,26 @@ bool pinCanAnalogInput(int pin) {
 
 bool pinUsedByOther(int pin, int moduleIndex) {
   if (pin < 0) return false;
-  for (uint8_t i = 0; i < moduleCount; ++i) if (i != moduleIndex && modules[i].pin == pin) return true;
+  for (uint8_t i = 0; i < moduleCount; ++i) {
+    if (i != moduleIndex && (modules[i].pin == pin || modules[i].pin2 == pin || modules[i].pin3 == pin)) return true;
+  }
   return false;
+}
+
+bool validPinSet(int index, ModuleType type, bool analogInput, int pin, int pin2, int pin3) {
+  if (type == ModuleType::BUTTON || type == ModuleType::TEXT) return pin == -1 && pin2 == -1 && pin3 == -1;
+  if (pinUsedByOther(pin, index) || pinUsedByOther(pin2, index) || pinUsedByOther(pin3, index)) return false;
+  if (type == ModuleType::MOTOR) {
+    return pin != pin2 && pin != pin3 && pin2 != pin3 && pinCanOutput(pin) && pinCanOutput(pin2) && pinCanOutput(pin3);
+  }
+  if (pin2 != -1 || pin3 != -1) return false;
+  if (type == ModuleType::VALUE) return analogInput ? pinCanAnalogInput(pin) : pin >= 0 && pin <= 39 && !(pin >= 6 && pin <= 11);
+  return pinCanOutput(pin);
 }
 
 bool validPinForModule(int index, int pin) {
   const Module& module = modules[index];
-  if (module.type == ModuleType::BUTTON || module.type == ModuleType::TEXT) return pin == -1;
-  if (pinUsedByOther(pin, index)) return false;
-  if (module.type == ModuleType::VALUE) return module.analogInput ? pinCanAnalogInput(pin) : pin >= 0 && pin <= 39 && !(pin >= 6 && pin <= 11);
-  return pinCanOutput(pin);
+  return validPinSet(index, module.type, module.analogInput, pin, module.pin2, module.pin3);
 }
 
 void sendJson(JsonDocument& document) {
@@ -152,6 +166,8 @@ void persistModule(uint8_t index) {
   char key[8];
   snprintf(key, sizeof(key), "n%u", index); preferences.putString(key, modules[index].name);
   snprintf(key, sizeof(key), "p%u", index); preferences.putChar(key, modules[index].pin);
+  snprintf(key, sizeof(key), "p2%u", index); preferences.putChar(key, modules[index].pin2);
+  snprintf(key, sizeof(key), "p3%u", index); preferences.putChar(key, modules[index].pin3);
   snprintf(key, sizeof(key), "e%u", index); preferences.putBool(key, modules[index].enabled);
   snprintf(key, sizeof(key), "o%u", index); preferences.putUChar(key, modules[index].order);
   if (customTable || index >= DEFAULT_MODULE_COUNT) {
@@ -202,6 +218,7 @@ void loadConfiguration() {
   customTable = preferences.getBool("custom", false);
   moduleCount = preferences.getUChar("count", DEFAULT_MODULE_COUNT);
   if (moduleCount > MAX_MODULES || (!customTable && moduleCount < DEFAULT_MODULE_COUNT)) moduleCount = DEFAULT_MODULE_COUNT;
+  for (uint8_t i = 0; i < MAX_MODULES; ++i) { modules[i].pin2 = -1; modules[i].pin3 = -1; }
   for (uint8_t i = 0; i < moduleCount; ++i) {
     if (customTable || i >= DEFAULT_MODULE_COUNT) loadRuntimeDefinition(i);
     char key[8];
@@ -209,11 +226,13 @@ void loadConfiguration() {
     String savedName = preferences.getString(key, modules[i].defaultName);
     strlcpy(modules[i].name, savedName.c_str(), sizeof(modules[i].name));
     snprintf(key, sizeof(key), "p%u", i); modules[i].pin = preferences.getChar(key, modules[i].defaultPin);
+    snprintf(key, sizeof(key), "p2%u", i); modules[i].pin2 = preferences.getChar(key, -1);
+    snprintf(key, sizeof(key), "p3%u", i); modules[i].pin3 = preferences.getChar(key, -1);
     snprintf(key, sizeof(key), "e%u", i); modules[i].enabled = preferences.getBool(key, true);
     snprintf(key, sizeof(key), "o%u", i); modules[i].order = preferences.getUChar(key, i);
     modules[i].value = modules[i].defaultValue;
     modules[i].text[0] = '\0';
-    if (!validPinForModule(i, modules[i].pin)) modules[i].pin = modules[i].defaultPin;
+    if (!validPinForModule(i, modules[i].pin)) { modules[i].pin = modules[i].defaultPin; modules[i].pin2 = -1; modules[i].pin3 = -1; }
   }
   bool usedOrder[MAX_MODULES] = {};
   bool orderValid = true;
@@ -236,15 +255,21 @@ void configureModulePin(uint8_t index) {
   if (module.type == ModuleType::TOGGLE) { pinMode(module.pin, OUTPUT); digitalWrite(module.pin, LOW); module.value = 0; }
   else if (module.type == ModuleType::SLIDER) { ledcAttach(module.pin, PWM_FREQUENCY, PWM_RESOLUTION_BITS); ledcWrite(module.pin, 0); module.value = module.minimum; }
   else if (module.type == ModuleType::SERVO) { servos[index].setPeriodHertz(50); servos[index].attach(module.pin, 500, 2400); servos[index].write((int)module.value); }
+  else if (module.type == ModuleType::MOTOR) {
+    pinMode(module.pin2, OUTPUT); pinMode(module.pin3, OUTPUT);
+    digitalWrite(module.pin2, LOW); digitalWrite(module.pin3, LOW);
+    ledcAttach(module.pin, PWM_FREQUENCY, PWM_RESOLUTION_BITS); ledcWrite(module.pin, 0); module.value = 0;
+  }
   else if (module.type == ModuleType::VALUE) pinMode(module.pin, INPUT);
 }
 
 void detachModulePin(uint8_t index) {
   Module& module = modules[index];
   if (module.pin < 0) return;
-  if (module.type == ModuleType::SLIDER) ledcDetach(module.pin);
+  if (module.type == ModuleType::SLIDER || module.type == ModuleType::MOTOR) ledcDetach(module.pin);
   if (module.type == ModuleType::SERVO) servos[index].detach();
   if (module.type == ModuleType::TOGGLE) digitalWrite(module.pin, LOW);
+  if (module.type == ModuleType::MOTOR) { digitalWrite(module.pin2, LOW); digitalWrite(module.pin3, LOW); pinMode(module.pin2, INPUT); pinMode(module.pin3, INPUT); }
   pinMode(module.pin, INPUT);
 }
 
@@ -256,17 +281,29 @@ void applyValue(uint8_t index, double value) {
     const uint32_t maximumDuty = (1UL << PWM_RESOLUTION_BITS) - 1;
     const uint32_t duty = (uint32_t)((module.value - module.minimum) * maximumDuty / (module.maximum - module.minimum));
     ledcWrite(module.pin, duty);
-  } else if (module.type == ModuleType::SERVO) servos[index].write((int)module.value);
+  } else if (module.type == ModuleType::SERVO) {
+    if (!servos[index].attached()) { servos[index].setPeriodHertz(50); servos[index].attach(module.pin, 500, 2400); }
+    servos[index].write((int)module.value);
+  } else if (module.type == ModuleType::MOTOR) {
+    const bool forward = module.value > 0;
+    const bool reverse = module.value < 0;
+    digitalWrite(module.pin2, forward ? HIGH : LOW);
+    digitalWrite(module.pin3, reverse ? HIGH : LOW);
+    const uint32_t maximumDuty = (1UL << PWM_RESOLUTION_BITS) - 1;
+    ledcWrite(module.pin, (uint32_t)(abs(module.value) * maximumDuty / 100.0));
+  }
 }
 
 void safeOutputsOff() {
   for (uint8_t i = 0; i < moduleCount; ++i) {
-    if (modules[i].type == ModuleType::TOGGLE || modules[i].type == ModuleType::SLIDER) {
-      applyValue(i, modules[i].minimum);
+    if (modules[i].type == ModuleType::TOGGLE || modules[i].type == ModuleType::SLIDER || modules[i].type == ModuleType::MOTOR) {
+      applyValue(i, modules[i].type == ModuleType::MOTOR ? 0 : modules[i].minimum);
       if (clientConnected) {
         notifyValue(i);
         delay(20);
       }
+    } else if (modules[i].type == ModuleType::SERVO && servos[i].attached()) {
+      servos[i].detach();
     }
   }
   safeOffApplied = true;
@@ -277,15 +314,18 @@ void addModuleJson(JsonObject object, const Module& module) {
   object["enabled"] = module.enabled; object["order"] = module.order;
   object["deletable"] = strcmp(module.id, "all_off") != 0 && strcmp(module.id, "status_1") != 0;
   if (module.pin >= 0) object["pin"] = module.pin;
+  if (module.pin2 >= 0) object["pin2"] = module.pin2;
+  if (module.pin3 >= 0) object["pin3"] = module.pin3;
   if (module.type == ModuleType::TOGGLE) object["value"] = module.value >= 0.5;
   else if (module.type == ModuleType::TEXT) object["value"] = module.text;
   else object["value"] = module.value;
-  if (module.type == ModuleType::SLIDER || module.type == ModuleType::SERVO || module.type == ModuleType::VALUE) {
+  if (module.type == ModuleType::SLIDER || module.type == ModuleType::SERVO || module.type == ModuleType::MOTOR || module.type == ModuleType::VALUE) {
     object["min"] = module.minimum; object["max"] = module.maximum;
   }
-  if (module.type == ModuleType::SLIDER || module.type == ModuleType::SERVO) object["step"] = module.step;
+  if (module.type == ModuleType::SLIDER || module.type == ModuleType::SERVO || module.type == ModuleType::MOTOR) object["step"] = module.step;
   if (strlen(module.unit) > 0) object["unit"] = module.unit;
   if (module.type == ModuleType::VALUE) object["decimals"] = module.decimals;
+  if (module.type == ModuleType::VALUE) object["analog_input"] = module.analogInput;
   if (module.type == ModuleType::BUTTON) object["label"] = module.buttonLabel;
 }
 
@@ -293,6 +333,7 @@ bool parseModuleType(const char* value, ModuleType& type) {
   if (strcmp(value, "toggle") == 0) type = ModuleType::TOGGLE;
   else if (strcmp(value, "slider") == 0) type = ModuleType::SLIDER;
   else if (strcmp(value, "servo") == 0) type = ModuleType::SERVO;
+  else if (strcmp(value, "motor") == 0) type = ModuleType::MOTOR;
   else if (strcmp(value, "value") == 0) type = ModuleType::VALUE;
   else if (strcmp(value, "button") == 0) type = ModuleType::BUTTON;
   else if (strcmp(value, "text") == 0) type = ModuleType::TEXT;
@@ -312,6 +353,15 @@ void copyRuntimeSlot(uint8_t destination, uint8_t source) {
   modules[destination].buttonLabel = runtimeLabels[destination];
 }
 
+void makeTableRuntime() {
+  if (customTable) return;
+  for (uint8_t i = 0; i < moduleCount; ++i) copyRuntimeSlot(i, i);
+  customTable = true;
+  preferences.putBool("custom", true);
+  preferences.putUChar("count", moduleCount);
+  for (uint8_t i = 0; i < moduleCount; ++i) persistModule(i);
+}
+
 void addRuntimeModule(JsonObject definition) {
   if (moduleCount >= MAX_MODULES) return sendError("Maximum module count reached");
   if (!definition["type"].is<const char*>() || !definition["name"].is<const char*>()) return sendError("Module needs type and name");
@@ -319,8 +369,9 @@ void addRuntimeModule(JsonObject definition) {
   if (strlen(requestedName) < 1 || strlen(requestedName) > 31) return sendError("Name must be 1 to 31 characters");
   ModuleType type;
   if (!parseModuleType(definition["type"], type)) return sendError("Unsupported module type");
-  const bool usesPin = type == ModuleType::TOGGLE || type == ModuleType::SLIDER || type == ModuleType::SERVO || type == ModuleType::VALUE;
+  const bool usesPin = type == ModuleType::TOGGLE || type == ModuleType::SLIDER || type == ModuleType::SERVO || type == ModuleType::MOTOR || type == ModuleType::VALUE;
   if (usesPin && !definition["pin"].is<int>()) return sendError("Module needs an integer pin");
+  if (type == ModuleType::MOTOR && (!definition["pin2"].is<int>() || !definition["pin3"].is<int>())) return sendError("Motor needs PWM, direction A, and direction B pins");
   const uint8_t index = moduleCount;
   memset(&modules[index], 0, sizeof(Module));
   uint32_t nextId = preferences.getUInt("next_id", 1);
@@ -332,14 +383,16 @@ void addRuntimeModule(JsonObject definition) {
   Module& module = modules[index];
   module.id = runtimeIds[index]; module.type = type; module.defaultName = runtimeDefaultNames[index];
   module.defaultPin = usesPin ? definition["pin"].as<int>() : -1;
-  module.minimum = definition["min"] | 0.0; module.maximum = definition["max"] | (type == ModuleType::SERVO ? 180.0 : 100.0);
+  module.minimum = definition["min"] | (type == ModuleType::MOTOR ? -100.0 : 0.0); module.maximum = definition["max"] | (type == ModuleType::SERVO ? 180.0 : 100.0);
   module.step = definition["step"] | 1.0; module.unit = runtimeUnits[index];
   module.decimals = constrain(definition["decimals"] | 0, 0, 6);
   module.defaultValue = definition["value"] | 0.0; module.buttonLabel = runtimeLabels[index];
-  module.analogInput = type == ModuleType::VALUE; module.pin = module.defaultPin;
+  module.analogInput = definition["analog_input"] | (type == ModuleType::VALUE); module.pin = module.defaultPin;
+  module.pin2 = type == ModuleType::MOTOR ? definition["pin2"].as<int>() : -1;
+  module.pin3 = type == ModuleType::MOTOR ? definition["pin3"].as<int>() : -1;
   module.enabled = true; module.order = moduleCount; module.value = module.defaultValue;
   strlcpy(module.name, requestedName, sizeof(module.name)); module.text[0] = '\0';
-  if ((type == ModuleType::SLIDER || type == ModuleType::SERVO || type == ModuleType::VALUE) && (module.maximum <= module.minimum || module.step <= 0)) return sendError("Invalid module range");
+  if ((type == ModuleType::SLIDER || type == ModuleType::SERVO || type == ModuleType::MOTOR || type == ModuleType::VALUE) && (module.maximum <= module.minimum || module.step <= 0)) return sendError("Invalid module range");
   if (usesPin && !validPinForModule(index, module.pin)) return sendError("Invalid or conflicting pin for module type");
   module.value = snappedValue(module, module.value);
   ++moduleCount;
@@ -348,6 +401,34 @@ void addRuntimeModule(JsonObject definition) {
   configureModulePin(index);
   bumpRevision();
   sendSuccess(module.id);
+}
+
+void updateRuntimeModule(uint8_t index, JsonObject definition) {
+  Module& module = modules[index];
+  if (module.type == ModuleType::BUTTON || module.type == ModuleType::TEXT) return sendError("System modules cannot change hardware type");
+  if (!definition["type"].is<const char*>() || !definition["pin"].is<int>()) return sendError("Type and primary pin are required");
+  ModuleType newType;
+  if (!parseModuleType(definition["type"], newType) || newType == ModuleType::BUTTON || newType == ModuleType::TEXT) return sendError("Unsupported hardware type");
+  const int newPin = definition["pin"];
+  const int newPin2 = newType == ModuleType::MOTOR && definition["pin2"].is<int>() ? definition["pin2"].as<int>() : -1;
+  const int newPin3 = newType == ModuleType::MOTOR && definition["pin3"].is<int>() ? definition["pin3"].as<int>() : -1;
+  const bool newAnalogInput = newType == ModuleType::VALUE ? (definition["analog_input"] | true) : false;
+  double newMinimum = definition["min"] | (newType == ModuleType::MOTOR ? -100.0 : 0.0);
+  double newMaximum = definition["max"] | (newType == ModuleType::SERVO ? 180.0 : (newType == ModuleType::VALUE && newAnalogInput ? 4095.0 : 100.0));
+  double newStep = definition["step"] | 1.0;
+  double newDefault = definition["value"] | (newType == ModuleType::SERVO ? 90.0 : 0.0);
+  if ((newType == ModuleType::SLIDER || newType == ModuleType::SERVO || newType == ModuleType::MOTOR || newType == ModuleType::VALUE) && (newMaximum <= newMinimum || newStep <= 0)) return sendError("Invalid module range");
+  if (!validPinSet(index, newType, newAnalogInput, newPin, newPin2, newPin3)) return sendError("Invalid or conflicting pins for module type");
+
+  detachModulePin(index);
+  makeTableRuntime();
+  Module& updated = modules[index];
+  updated.type = newType; updated.defaultPin = newPin; updated.pin = newPin; updated.pin2 = newPin2; updated.pin3 = newPin3;
+  updated.minimum = newMinimum; updated.maximum = newMaximum; updated.step = newStep;
+  updated.defaultValue = constrain(newDefault, newMinimum, newMaximum); updated.value = updated.defaultValue;
+  updated.analogInput = newAnalogInput; updated.decimals = constrain(definition["decimals"] | 0, 0, 6);
+  strlcpy(runtimeUnits[index], definition["unit"] | "", sizeof(runtimeUnits[index])); updated.unit = runtimeUnits[index];
+  persistModule(index); configureModulePin(index); bumpRevision(); sendSuccess(updated.id);
 }
 
 void deleteRuntimeModule(uint8_t index) {
@@ -443,12 +524,17 @@ void handleCommand(const std::string& raw) {
     return;
   }
   Module& module = modules[index];
+  if (strcmp(action, "update_module") == 0) {
+    if (!command["module"].is<JsonObject>()) return sendError("Missing module definition");
+    updateRuntimeModule(index, command["module"].as<JsonObject>());
+    return;
+  }
   if (strcmp(action, "set_value") == 0) {
     if (!module.enabled) return sendError("Module is disabled");
     if (module.type == ModuleType::TOGGLE) {
       if (!command["value"].is<bool>()) return sendError("Toggle value must be boolean");
       applyValue(index, command["value"].as<bool>() ? 1 : 0);
-    } else if (module.type == ModuleType::SLIDER || module.type == ModuleType::SERVO) {
+    } else if (module.type == ModuleType::SLIDER || module.type == ModuleType::SERVO || module.type == ModuleType::MOTOR) {
       if (!command["value"].is<double>() && !command["value"].is<int>()) return sendError("Value must be numeric");
       applyValue(index, command["value"].as<double>());
     } else return sendError("Module is read-only");
@@ -472,7 +558,7 @@ void handleCommand(const std::string& raw) {
   if (strcmp(action, "set_module_enabled") == 0) {
     if (!command["enabled"].is<bool>()) return sendError("enabled must be boolean");
     module.enabled = command["enabled"];
-    if (!module.enabled && (module.type == ModuleType::TOGGLE || module.type == ModuleType::SLIDER)) applyValue(index, module.minimum);
+    if (!module.enabled && (module.type == ModuleType::TOGGLE || module.type == ModuleType::SLIDER || module.type == ModuleType::MOTOR)) applyValue(index, module.type == ModuleType::MOTOR ? 0 : module.minimum);
     persistModule(index); bumpRevision(); sendSuccess(module.id); return;
   }
   if (strcmp(action, "set_module_pin") == 0) {

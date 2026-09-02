@@ -45,6 +45,8 @@ BLE service → validated models/state → widget registry → module cards
 
 The ESP32 is the source of truth. Names, enabled state, order, and assigned pins are stored in ESP32 NVS via `Preferences`, so they follow the controller across phones. The phone caches the last validated manifest by BLE device ID for quick restoration, but refreshes it after reconnecting. Hardware types, IDs, ranges, units, and behavior remain firmware-owned.
 
+Regular modules can be converted in the app between on/off output, PWM light, servo, reversible motor/winch, digital input, and analog input. The universal firmware validates and saves the new hardware profile without another firmware upload. A reversible motor profile uses one PWM/enable pin plus two direction pins and must connect through a properly rated H-bridge.
+
 ## Requirements
 
 - Flutter 3.47.2 or compatible stable release

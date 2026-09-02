@@ -45,6 +45,7 @@ Common fields:
 - `type`: widget capability type.
 - `name`: persisted display name, 1–31 characters.
 - `pin`: ESP32 GPIO when the module uses hardware.
+- `pin2`, `pin3`: direction A/B GPIOs used by a reversible motor driver.
 - `enabled`: whether the main screen displays and operates the module.
 - `order`: zero-based display position.
 - `value`: current value.
@@ -56,7 +57,8 @@ Type-specific capabilities:
 | `toggle` | Boolean `value` | ON/OFF segmented control |
 | `slider` | Numeric `min`, `max`, `step`, `value`; optional `unit` | Debounced slider |
 | `servo` | Numeric `min`, `max`, `step`, `value`; optional `unit` | Debounced angle slider |
-| `value` | `value`; optional `min`, `max`, `unit`, `decimals` | Read-only formatted value |
+| `motor` | Three pins and numeric range `-100` to `100` | Momentary direction/speed slider that stops on release |
+| `value` | `value`; optional `min`, `max`, `unit`, `decimals`, `analog_input` | Read-only digital or analog value |
 | `button` | Optional `label` and `command_value` | One-shot action button |
 | `text` | Text `value` | Read-only status text |
 
@@ -83,6 +85,7 @@ Edit persisted configuration:
 {"command":"rename_module","module_id":"relay_1","name":"Main Pump"}
 {"command":"set_module_enabled","module_id":"relay_1","enabled":false}
 {"command":"set_module_pin","module_id":"relay_1","pin":27}
+{"command":"update_module","module_id":"pwm_1","module":{"type":"servo","pin":25,"min":0,"max":180,"step":1,"unit":"degrees","value":90}}
 {"command":"set_module_order","order":["servo_1","relay_1","pwm_1","led_1","analog_1","all_off","status_1"]}
 {"command":"reset_layout"}
 ```
@@ -92,12 +95,15 @@ Create and permanently delete runtime modules:
 ```json
 {"command":"add_module","module":{"type":"toggle","name":"Cabin Light","pin":27,"value":false}}
 {"command":"add_module","module":{"type":"slider","name":"Deck Brightness","pin":32,"min":0,"max":100,"step":1,"unit":"%","value":0}}
+{"command":"add_module","module":{"type":"motor","name":"Winch","pin":25,"pin2":26,"pin3":27,"min":-100,"max":100,"step":1,"unit":"%","value":0}}
 {"command":"delete_module","module_id":"module_2"}
 ```
 
 The ESP32 generates stable IDs such as `module_2`. Added definitions are stored in Preferences. All ordinary modules—including compiled defaults—can be deleted. The Safety and Controller Status modules return `"deletable":false` and remain protected. Reset restores the original compiled table after defaults have been deleted. The fixed-capacity firmware supports up to 12 total modules.
 
-`set_module_order` must contain every existing ID exactly once. “Hide” uses `set_module_enabled`; it does not delete firmware-defined hardware. `set_module_pin` rejects flash pins, input-only pins for outputs, non-ADC pins for analog modules, and pins already assigned to another module.
+`update_module` atomically changes a regular module's hardware profile. The ESP32 validates the complete proposed configuration before detaching the old output, saves it in Preferences, and publishes a new manifest. Safety and status system modules cannot change type.
+
+`set_module_order` must contain every existing ID exactly once. “Hide” uses `set_module_enabled`; it does not delete firmware-defined hardware. Pin validation rejects flash pins, input-only pins for outputs, non-ADC pins for analog modules, duplicate pins within a motor, and pins already assigned to another module.
 
 ## Responses and events
 

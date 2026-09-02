@@ -13,21 +13,32 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
   String type = 'toggle';
   final name = TextEditingController(text: 'New Light');
   final pin = TextEditingController();
+  final pin2 = TextEditingController();
+  final pin3 = TextEditingController();
   final minimum = TextEditingController(text: '0');
   final maximum = TextEditingController(text: '100');
   final step = TextEditingController(text: '1');
   final unit = TextEditingController(text: '%');
   final defaultValue = TextEditingController(text: '0');
   final label = TextEditingController(text: 'Run Action');
-  bool get usesPin =>
-      const {'toggle', 'slider', 'servo', 'value'}.contains(type);
-  bool get usesRange => const {'slider', 'servo', 'value'}.contains(type);
+  bool get usesPin => const {
+        'toggle',
+        'slider',
+        'servo',
+        'motor',
+        'value',
+        'digital_input'
+      }.contains(type);
+  bool get usesRange =>
+      const {'slider', 'servo', 'motor', 'value'}.contains(type);
 
   @override
   void dispose() {
     for (final c in [
       name,
       pin,
+      pin2,
+      pin3,
       minimum,
       maximum,
       step,
@@ -54,7 +65,11 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                       value: 'toggle', child: Text('Toggle / light / relay')),
                   DropdownMenuItem(value: 'slider', child: Text('PWM slider')),
                   DropdownMenuItem(value: 'servo', child: Text('Servo')),
-                  DropdownMenuItem(value: 'value', child: Text('Analog value')),
+                  DropdownMenuItem(
+                      value: 'motor', child: Text('Reversible motor / winch')),
+                  DropdownMenuItem(value: 'value', child: Text('Analog input')),
+                  DropdownMenuItem(
+                      value: 'digital_input', child: Text('Digital input')),
                   DropdownMenuItem(
                       value: 'button', child: Text('Action button')),
                   DropdownMenuItem(value: 'text', child: Text('Text status')),
@@ -75,6 +90,11 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                       maximum.text = '4095';
                       unit.text = 'ADC';
                       defaultValue.text = '0';
+                    } else if (value == 'motor') {
+                      minimum.text = '-100';
+                      maximum.text = '100';
+                      unit.text = '%';
+                      defaultValue.text = '0';
                     }
                   });
                 },
@@ -91,6 +111,25 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: 'ESP32 pin'),
                     validator: _integerValidator)
+              ],
+              if (type == 'motor') ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                    controller: pin2,
+                    keyboardType: TextInputType.number,
+                    decoration:
+                        const InputDecoration(labelText: 'Direction A pin'),
+                    validator: _integerValidator),
+                const SizedBox(height: 12),
+                TextFormField(
+                    controller: pin3,
+                    keyboardType: TextInputType.number,
+                    decoration:
+                        const InputDecoration(labelText: 'Direction B pin'),
+                    validator: _integerValidator),
+                const SizedBox(height: 8),
+                const Text(
+                    'Connect these three signals to a suitable H-bridge. Never connect a motor directly to the ESP32.'),
               ],
               if (usesRange) ...[
                 const SizedBox(height: 12),
@@ -167,10 +206,14 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
   Future<void> _save() async {
     if (!formKey.currentState!.validate()) return;
     final definition = <String, dynamic>{
-      'type': type,
+      'type': type == 'digital_input' ? 'value' : type,
       'name': name.text.trim()
     };
     if (usesPin) definition['pin'] = int.parse(pin.text);
+    if (type == 'motor') {
+      definition['pin2'] = int.parse(pin2.text);
+      definition['pin3'] = int.parse(pin3.text);
+    }
     if (usesRange) {
       final min = double.parse(minimum.text), max = double.parse(maximum.text);
       if (min >= max) {
@@ -187,7 +230,17 @@ class _AddModuleScreenState extends State<AddModuleScreen> {
       });
       if (type == 'value') {
         definition['decimals'] = 0;
+        definition['analog_input'] = true;
       }
+    } else if (type == 'digital_input') {
+      definition.addAll({
+        'min': 0,
+        'max': 1,
+        'value': 0,
+        'unit': '',
+        'decimals': 0,
+        'analog_input': false
+      });
     } else if (type == 'toggle') {
       definition['value'] = false;
     } else if (type == 'button') {
