@@ -154,9 +154,10 @@ class ModuleModel {
       };
 
   ModuleModel withChanges(
-      {String? name, bool? enabled, int? order, dynamic value}) {
+      {String? name, int? pin, bool? enabled, int? order, dynamic value}) {
     final json = toJson();
     if (name != null) json['name'] = name;
+    if (pin != null) json['pin'] = pin;
     if (enabled != null) json['enabled'] = enabled;
     if (order != null) json['order'] = order;
     if (value != null) json['value'] = value;

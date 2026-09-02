@@ -15,6 +15,7 @@ class AppController extends ChangeNotifier {
   final SettingsService storage;
   final ManifestAssembler _assembler = ManifestAssembler();
   final Map<String, Timer> _sliderTimers = {};
+  Timer? _manifestRefreshTimer;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   AppSettings settings = const AppSettings();
   BleLinkState linkState = BleLinkState.disconnected;
@@ -117,8 +118,17 @@ class AppController extends ChangeNotifier {
         'module_id': module.id,
         if (module.commandValue != null) 'value': module.commandValue
       });
-  Future<void> renameModule(String id, String name) =>
-      _send({'command': 'rename_module', 'module_id': id, 'name': name.trim()});
+  Future<void> renameModule(String id, String name) async {
+    final index = modules.indexWhere((module) => module.id == id);
+    if (index >= 0) {
+      modules = [...modules]..[index] =
+          modules[index].withChanges(name: name.trim());
+      notifyListeners();
+    }
+    await _sendConfiguration(
+        {'command': 'rename_module', 'module_id': id, 'name': name.trim()});
+  }
+
   Future<void> setModuleEnabled(String id, bool enabled) async {
     final index = modules.indexWhere((module) => module.id == id);
     if (index >= 0) {
@@ -126,18 +136,30 @@ class AppController extends ChangeNotifier {
           modules[index].withChanges(enabled: enabled);
       notifyListeners();
     }
-    await _send(
+    await _sendConfiguration(
         {'command': 'set_module_enabled', 'module_id': id, 'enabled': enabled});
   }
 
   Future<void> addModule(Map<String, dynamic> definition) =>
-      _send({'command': 'add_module', 'module': definition});
-  Future<void> deleteModule(String id) =>
-      _send({'command': 'delete_module', 'module_id': id});
-  Future<void> setModulePin(String id, int pin) =>
-      _send({'command': 'set_module_pin', 'module_id': id, 'pin': pin});
+      _sendConfiguration({'command': 'add_module', 'module': definition});
+  Future<void> deleteModule(String id) async {
+    modules = modules.where((module) => module.id != id).toList();
+    notifyListeners();
+    await _sendConfiguration({'command': 'delete_module', 'module_id': id});
+  }
+
+  Future<void> setModulePin(String id, int pin) async {
+    final index = modules.indexWhere((module) => module.id == id);
+    if (index >= 0) {
+      modules = [...modules]..[index] = modules[index].withChanges(pin: pin);
+      notifyListeners();
+    }
+    await _sendConfiguration(
+        {'command': 'set_module_pin', 'module_id': id, 'pin': pin});
+  }
+
   Future<void> setModuleOrder(List<String> order) =>
-      _send({'command': 'set_module_order', 'order': order});
+      _sendConfiguration({'command': 'set_module_order', 'order': order});
   Future<void> reorderModules(int oldIndex, int newIndex) async {
     final reordered = [...modules];
     final item = reordered.removeAt(oldIndex);
@@ -147,7 +169,15 @@ class AppController extends ChangeNotifier {
     await setModuleOrder(reordered.map((module) => module.id).toList());
   }
 
-  Future<void> resetLayout() => _send({'command': 'reset_layout'});
+  Future<void> resetLayout() => _sendConfiguration({'command': 'reset_layout'});
+
+  Future<void> _sendConfiguration(Map<String, dynamic> command) async {
+    await _send(command);
+    _manifestRefreshTimer?.cancel();
+    _manifestRefreshTimer = Timer(const Duration(milliseconds: 350), () {
+      if (connected) requestManifest();
+    });
+  }
 
   Future<void> sendCustom(String text) async {
     try {
@@ -263,6 +293,7 @@ class AppController extends ChangeNotifier {
     for (final timer in _sliderTimers.values) {
       timer.cancel();
     }
+    _manifestRefreshTimer?.cancel();
     ble.dispose();
     super.dispose();
   }
