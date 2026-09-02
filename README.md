@@ -6,6 +6,8 @@ See [PROTOCOL.md](PROTOCOL.md) for every JSON message and field.
 
 ## Download the Android app
 
+There are no requirements for the mobile phone other than the app and BLE connectivity.
+
 Open the repository's [Releases page](https://github.com/Chaunsy19/Bluetooth-Modular-ESP32-Controller-APK-/releases), select the newest release, and download the `.apk` file under **Assets**.
 
 On the Android phone, open the downloaded APK and allow installation from that browser or file manager when Android asks. Google Play Protect may display a warning because this app is installed directly instead of through the Play Store.
