@@ -23,9 +23,11 @@ class Esp32ControlApp extends StatelessWidget {
                 ColorScheme.fromSeed(seedColor: const Color(0xff006a6a)),
             useMaterial3: true,
             inputDecorationTheme: const InputDecorationTheme(
+                filled: true,
+                floatingLabelBehavior: FloatingLabelBehavior.always,
                 border: OutlineInputBorder(),
                 contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 14))),
+                    EdgeInsets.symmetric(horizontal: 16, vertical: 16))),
         home: HomeScreen(controller: controller),
       );
 }

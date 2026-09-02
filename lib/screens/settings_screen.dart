@@ -51,19 +51,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
             key: _form,
             child: ListView(padding: const EdgeInsets.all(16), children: [
               Text('BLE', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 20),
               TextFormField(
                   controller: _fields['name'],
                   decoration:
                       const InputDecoration(labelText: 'ESP32 device name'),
                   validator: _required),
+              const SizedBox(height: 16),
               TextFormField(
                   controller: _fields['service'],
                   decoration: const InputDecoration(labelText: 'Service UUID'),
                   validator: _uuid),
+              const SizedBox(height: 16),
               TextFormField(
                   controller: _fields['command'],
                   decoration: const InputDecoration(labelText: 'Command UUID'),
                   validator: _uuid),
+              const SizedBox(height: 16),
               TextFormField(
                   controller: _fields['status'],
                   decoration: const InputDecoration(labelText: 'Status UUID'),
